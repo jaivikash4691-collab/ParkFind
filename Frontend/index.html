@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ParkFind — Smart Parking & Parking Space Marketplace</title>
+  <meta name="description" content="ParkFind is a two-sided smart parking marketplace connecting drivers looking for guaranteed parking spots with parking owners managing spaces in real time.">
+
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+
+  <!-- Leaflet Map CSS CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+  <!-- ParkFind Custom Vanilla CSS -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ================= TOP NAVIGATION ================= -->
+  <header class="navbar-wrapper">
+    <div class="app-container">
+      <div class="navbar-content">
+        
+        <!-- Brand Logo -->
+        <div class="nav-brand" onclick="navigateTo('home')">
+          <div class="brand-icon">
+            <span>P</span>
+          </div>
+          <div class="brand-text">
+            <span class="brand-name">
+              ParkFind <span class="badge badge-primary badge-pill" id="cityBadge">Explore</span>
+            </span>
+            <span class="brand-tag" id="navRoleSubtitle">Smart Parking Marketplace</span>
+          </div>
+        </div>
+
+        <!-- Role Pill Indicator -->
+        <div class="role-pill" id="userRoleBadge">
+          <span id="roleIcon">🚗</span>
+          <span id="roleLabel">Customer Mode</span>
+        </div>
+
+        <!-- Dynamic Navigation Menu -->
+        <ul class="nav-menu" id="navMenu">
+          <!-- Customer Menu Items -->
+          <li class="cust-nav-item"><a href="#home" data-page="home" class="nav-link active">Discover</a></li>
+          <li class="cust-nav-item"><a href="#explore" data-page="explore" class="nav-link">Map & Spaces</a></li>
+          <li class="cust-nav-item"><a href="#find-car" data-page="find-car" class="nav-link">Find My Car</a></li>
+          <li class="cust-nav-item"><a href="#forecast" data-page="forecast" class="nav-link">Demand Insights</a></li>
+          <li class="cust-nav-item"><a href="#history" data-page="history" class="nav-link">My Bookings</a></li>
+
+          <!-- Owner Menu Items (Exclusively shown when signed in as Owner) -->
+          <li class="owner-nav-item" style="display: none;"><a href="#owner-dashboard" data-page="owner-dashboard" class="nav-link">Dashboard</a></li>
+          <li class="owner-nav-item" style="display: none;"><a href="#owner-spaces" data-page="owner-spaces" class="nav-link">My Parking Spaces</a></li>
+          <li class="owner-nav-item" style="display: none;"><a href="#owner-bookings" data-page="owner-bookings" class="nav-link">Bookings & Check-In</a></li>
+          <li class="owner-nav-item" style="display: none;"><a href="#owner-earnings" data-page="owner-earnings" class="nav-link">Earnings & Financials</a></li>
+        </ul>
+
+        <!-- Right Actions -->
+        <div class="nav-actions">
+          <!-- Notification Dropdown -->
+          <div class="dropdown">
+            <button class="icon-btn" id="notifDropdownBtn" onclick="toggleDropdown('notificationDropdown')" title="Notifications">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            </button>
+            <div class="dropdown-menu" id="notificationDropdown">
+              <div style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);">Alerts & Updates</strong>
+                <button style="font-size: 0.75rem; color: var(--primary-600); font-weight: 700;" onclick="markAllNotificationsRead()">Mark Read</button>
+              </div>
+              <div id="notificationsList" style="max-height: 280px; overflow-y: auto; padding: 0.5rem 0;">
+                <div style="padding: 1rem; text-align: center; font-size: 0.8rem; color: var(--text-dim);">No new alerts</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Light/Dark Mode Switcher -->
+          <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" aria-label="Toggle Color Theme" title="Toggle Light / Dark Mode">
+            <span class="sun-icon">☀️</span>
+            <span class="moon-icon">🌙</span>
+          </button>
+
+          <!-- Auth / Profile Container -->
+          <div id="authContainer">
+            <!-- Injected by script.js -->
+          </div>
+
+          <!-- Mobile Menu Toggle -->
+          <button class="icon-btn mobile-only" id="mobileToggleBtn" onclick="toggleMobileMenu()" aria-label="Toggle navigation">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Global Toast Container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <!-- ================= MAIN CONTENT ================= -->
+  <main class="main-content">
+
+    <!-- Active Parking Session Floating Banner (Customer only) -->
+    <div class="active-session-banner mb-6" id="activeSessionBanner" style="display: none; margin-bottom: 1.5rem;">
+      <div class="card" style="background: linear-gradient(135deg, #1e3a8a, #0f172a); color: #ffffff; padding: 1.25rem 1.5rem; border: 1px solid rgba(59, 130, 246, 0.4); box-shadow: var(--shadow-lg);">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem;">
+          <div>
+            <span class="badge badge-success badge-pill" style="margin-bottom: 0.4rem;">
+              <span style="width: 6px; height: 6px; border-radius: 50%; background: #ffffff; display: inline-block;"></span> Active Parking Session
+            </span>
+            <div style="font-size: 1.1rem; font-weight: 800;" id="bannerVehicleInfo">Vehicle: TN 38 BR 8899</div>
+            <div style="font-size: 0.85rem; color: #93c5fd;" id="bannerSlotInfo">RS Puram Secure Parking · Bay A-06</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; color: #bfdbfe; font-weight: 700;">Remaining Time</div>
+            <div style="font-size: 1.8rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #fde047;" id="bannerTimer">01:30:00</div>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-secondary btn-sm" style="background: rgba(255,255,255,0.15); color: #ffffff; border: 1px solid rgba(255,255,255,0.3);" onclick="quickExtendSession(1)">+1 Hr</button>
+            <button class="btn btn-primary btn-sm" onclick="navigateTo('find-car')">Find My Car →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 1. CUSTOMER: DISCOVERY (#home) ================= -->
+    <section class="page-view active" id="view-home">
+      
+      <!-- Hero Section -->
+      <div class="hero-wrapper">
+        <div class="hero-pill">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background-color: var(--primary-600); display: inline-block;"></span>
+          Smart Parking Marketplace · Guaranteed Bay Availability
+        </div>
+
+        <h1 class="hero-title">
+          Find a parking spot near your destination <br>
+          <span class="gradient-text">effortlessly and on demand.</span>
+        </h1>
+
+        <p class="hero-subtitle">
+          Explore guaranteed parking spaces with live bay occupancy, digital entry pass reservations, and turn-by-turn indoor wayfinding.
+        </p>
+
+        <!-- Search Bar with Live Location -->
+        <div class="search-bar-card">
+          <svg style="color: var(--text-dim); margin-left: 0.5rem;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input 
+            type="text" 
+            id="homeSearchInput" 
+            class="search-bar-input" 
+            placeholder="Search city, area (e.g. RS Puram, Gandhipuram), or parking name..."
+            onkeydown="if(event.key==='Enter') executeHomeSearch()"
+          >
+          <button class="btn btn-secondary btn-sm" onclick="useCurrentLocation()" title="Use my GPS location">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg>
+            Near Me
+          </button>
+          <button class="btn btn-primary" onclick="executeHomeSearch()">
+            Find Parking
+          </button>
+        </div>
+
+        <!-- Locality / City Filter Pills -->
+        <div class="locality-pills" id="homeLocalityPills">
+          <span style="font-size: 0.8rem; color: var(--text-dim); font-weight: 600; margin-right: 0.25rem;">Popular Areas:</span>
+          <button class="filter-pill" onclick="filterByArea('RS Puram')">RS Puram</button>
+          <button class="filter-pill" onclick="filterByArea('Gandhipuram')">Gandhipuram</button>
+          <button class="filter-pill" onclick="filterByArea('Race Course')">Race Course</button>
+          <button class="filter-pill" onclick="filterByArea('Peelamedu')">Peelamedu</button>
+          <button class="filter-pill" onclick="filterByArea('Saibaba Colony')">Saibaba Colony</button>
+          <button class="filter-pill" onclick="filterByArea('Avinashi Road')">Avinashi Road</button>
+        </div>
+
+        <!-- Quick Stats Strip -->
+        <div class="grid grid-cols-4 card" style="padding: 1.25rem; text-align: center; margin-bottom: 2.5rem;">
+          <div>
+            <div style="font-size: 1.75rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--primary-600);" id="heroTotalLocations">8</div>
+            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Active Facilities</div>
+          </div>
+          <div style="border-left: 1px solid var(--border-subtle);">
+            <div style="font-size: 1.75rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--success-600);" id="heroAvailableSlots">--</div>
+            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Available Bays</div>
+          </div>
+          <div style="border-left: 1px solid var(--border-subtle);">
+            <div style="font-size: 1.75rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--warning-600);" id="heroActiveSessions">--</div>
+            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Active Sessions</div>
+          </div>
+          <div style="border-left: 1px solid var(--border-subtle);">
+            <div style="font-size: 1.75rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--primary-600);" id="heroStartingRate">₹25</div>
+            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Starting / Hour</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Smart Recommendation Section -->
+      <div id="smartRecContainer" style="margin-bottom: 2.5rem;"></div>
+
+      <!-- Nearby Featured Parking Facilities -->
+      <div style="margin-bottom: 3rem;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.25rem;">
+          <div>
+            <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--primary-600); letter-spacing: 0.05em;">Real-time Availability</span>
+            <h2 style="font-size: 1.5rem; font-weight: 800; color: var(--text-main); margin-top: 0.2rem;">Explore Parking Spaces</h2>
+          </div>
+          <button class="btn btn-outline-primary btn-sm" onclick="navigateTo('explore')">
+            Interactive Map View →
+          </button>
+        </div>
+
+        <div class="grid grid-cols-3" id="homeLocationsGrid">
+          <!-- Injected via JavaScript -->
+        </div>
+      </div>
+
+      <!-- Parking Demand & Insights Quick Strip -->
+      <div class="card" style="padding: 1.5rem; margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem;">
+          <div>
+            <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--primary-600);">Availability Outlook</span>
+            <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin-top: 0.15rem;">Today's Parking Demand Forecast</h3>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="navigateTo('forecast')">Full Analysis →</button>
+        </div>
+        <div style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 0.5rem;" id="homeForecastStrip">
+          <!-- Injected via JavaScript -->
+        </div>
+      </div>
+
+    </section>
+
+
+    <!-- ================= 2. CUSTOMER: MAP & EXPLORE (#explore) ================= -->
+    <section class="page-view" id="view-explore">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--primary-600);">Live Discovery</span>
+          <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-top: 0.2rem;">Explore Parking Near You</h1>
+          <p style="font-size: 0.875rem; color: var(--text-muted);">Compare rates, check live bay status on the interactive map, and reserve immediately.</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-secondary btn-sm" onclick="useCurrentLocation()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg>
+            Near Me (GPS)
+          </button>
+          <button class="btn btn-outline-primary btn-sm" onclick="loadLocations()">Refresh</button>
+        </div>
+      </div>
+
+      <!-- Filters & Toolbar -->
+      <div class="card" style="padding: 1rem; margin-bottom: 1.5rem;">
+        <div class="grid grid-cols-12" style="gap: 0.75rem;">
+          <div class="col-span-4">
+            <input type="text" id="exploreSearchInput" class="form-control" placeholder="Search city, area or facility..." oninput="filterAndRenderLocations()">
+          </div>
+          <div class="col-span-3">
+            <select id="exploreAreaSelect" class="form-select" onchange="filterAndRenderLocations()">
+              <option value="all">All Locations / Areas</option>
+            </select>
+          </div>
+          <div class="col-span-3">
+            <select id="exploreSortSelect" class="form-select" onchange="filterAndRenderLocations()">
+              <option value="recommended">Sort: Recommended</option>
+              <option value="nearest">Sort: Nearest Distance (GPS)</option>
+              <option value="price_asc">Sort: Price (Low to High)</option>
+              <option value="price_desc">Sort: Price (High to Low)</option>
+              <option value="available_desc">Sort: Most Available Bays</option>
+              <option value="rating_desc">Sort: Highest Rated</option>
+            </select>
+          </div>
+          <div class="col-span-2">
+            <select id="explorePriceFilter" class="form-select" onchange="filterAndRenderLocations()">
+              <option value="all">Any Price</option>
+              <option value="30">Under ₹30/hr</option>
+              <option value="40">Under ₹40/hr</option>
+              <option value="50">Under ₹50/hr</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-subtle);">
+          <button class="filter-pill active" id="chip-all" onclick="toggleQuickFilter('all')">All Amenities</button>
+          <button class="filter-pill" id="chip-ev" onclick="toggleQuickFilter('ev')">⚡ EV Fast Charging</button>
+          <button class="filter-pill" id="chip-covered" onclick="toggleQuickFilter('covered')">☂ Covered Roof</button>
+          <button class="filter-pill" id="chip-247" onclick="toggleQuickFilter('247')">🕒 24/7 Access</button>
+          <button class="filter-pill" id="chip-accessible" onclick="toggleQuickFilter('accessible')">♿ Accessible</button>
+        </div>
+      </div>
+
+      <!-- Map + Cards Split Layout -->
+      <div class="grid grid-cols-12" style="gap: 1.5rem;">
+        <!-- Left: Interactive Leaflet Map (7 Cols) -->
+        <div class="col-span-7">
+          <div class="card" style="padding: 0.5rem; position: sticky; top: calc(var(--header-height) + 1.5rem);">
+            <div id="interactiveMap" style="height: 580px; width: 100%; border-radius: var(--radius-md);"></div>
+          </div>
+        </div>
+
+        <!-- Right: Location Listings (5 Cols) -->
+        <div class="col-span-5" id="exploreCardsContainer" style="display: flex; flex-direction: column; gap: 1rem; max-height: 600px; overflow-y: auto; padding-right: 0.25rem;">
+          <!-- Injected via JavaScript -->
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= 3. CUSTOMER: VISUAL BAY BOOKING (#book) ================= -->
+    <section class="page-view" id="view-book">
+      <div style="margin-bottom: 1.5rem;">
+        <button class="btn btn-secondary btn-sm" onclick="navigateTo('explore')" style="margin-bottom: 0.75rem;">← Back to Map</button>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <span class="badge badge-primary" id="bookAreaBadge">RS Puram</span>
+            <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem;" id="bookLocationName">RS Puram Secure Parking</h1>
+            <p style="font-size: 0.85rem; color: var(--text-muted);" id="bookLocationAddress">142, DB Road, RS Puram</p>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Hourly Tariff</div>
+            <div style="font-size: 1.6rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--primary-600);" id="bookLocationRate">₹40/hr</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12" style="gap: 1.5rem;">
+        <!-- Left: 2D Visual Bay Grid (8 Cols) -->
+        <div class="col-span-8">
+          <div class="card" style="padding: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.5rem;">
+              <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main);">Interactive Parking Bay Matrix</h3>
+              <div style="display: flex; gap: 0.75rem; font-size: 0.75rem; font-weight: 700;">
+                <span style="display: flex; align-items: center; gap: 0.3rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--success-500);"></span> Available</span>
+                <span style="display: flex; align-items: center; gap: 0.3rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--primary-600);"></span> Selected</span>
+                <span style="display: flex; align-items: center; gap: 0.3rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--warning-500);"></span> Reserved</span>
+                <span style="display: flex; align-items: center; gap: 0.3rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--danger-500);"></span> Occupied</span>
+              </div>
+            </div>
+
+            <!-- Floor Tabs if location has multiple floors -->
+            <div id="bookingFloorTabs" style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem;"></div>
+
+            <!-- 2D Visual Bay Matrix -->
+            <div id="bayMatrixGrid" class="bay-matrix-container">
+              <!-- Injected dynamically via script.js -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Duration, Tariff & Checkout Form (4 Cols) -->
+        <div class="col-span-4">
+          <div class="card" style="padding: 1.5rem; position: sticky; top: calc(var(--header-height) + 1.5rem);">
+            <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); margin-bottom: 1rem;">Reservation Summary</h3>
+
+            <div style="padding: 1rem; border-radius: var(--radius-md); background: var(--bg-subtle); margin-bottom: 1rem; font-size: 0.85rem;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+                <span style="color: var(--text-muted);">Selected Spot:</span>
+                <strong style="color: var(--primary-600); font-family: 'JetBrains Mono', monospace;" id="summarySlotNo">Please select a bay</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--text-muted);">Bay Type:</span>
+                <span style="font-weight: 600;" id="summarySlotType">--</span>
+              </div>
+            </div>
+
+            <!-- Duration Selector -->
+            <div class="form-group">
+              <label class="form-label">Duration (Hours)</label>
+              <div style="display: flex; gap: 0.5rem;">
+                <button class="btn btn-secondary btn-sm flex-1 duration-btn active" data-hours="1" onclick="selectDuration(1)">1 hr</button>
+                <button class="btn btn-secondary btn-sm flex-1 duration-btn" data-hours="2" onclick="selectDuration(2)">2 hrs</button>
+                <button class="btn btn-secondary btn-sm flex-1 duration-btn" data-hours="3" onclick="selectDuration(3)">3 hrs</button>
+                <button class="btn btn-secondary btn-sm flex-1 duration-btn" data-hours="4" onclick="selectDuration(4)">4 hrs</button>
+              </div>
+            </div>
+
+            <!-- Vehicle & Driver Details -->
+            <div class="form-group">
+              <label class="form-label">Vehicle Number</label>
+              <input type="text" id="bookingVehicleNumber" class="form-control" placeholder="e.g. TN 38 BR 8899" style="text-transform: uppercase; font-family: 'JetBrains Mono', monospace;">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Driver Full Name</label>
+              <input type="text" id="bookingDriverName" class="form-control" placeholder="e.g. Raveendran K">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Phone Number</label>
+              <input type="tel" id="bookingDriverPhone" class="form-control" placeholder="e.g. +91 98422 10101">
+            </div>
+
+            <!-- Total Amount Calculation -->
+            <div style="padding: 1rem 0; border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; display: block;">Total Payable</span>
+                <span style="font-size: 0.75rem; color: var(--text-dim);" id="rateCalculationText">₹40 × 1 hr</span>
+              </div>
+              <div style="font-size: 1.6rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--success-600);" id="totalAmountDisplay">₹40</div>
+            </div>
+
+            <button class="btn btn-primary btn-block btn-lg" id="proceedToPayBtn" onclick="openPaymentModal()" disabled>
+              Proceed to Demo Pay
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= 4. CUSTOMER: FIND MY CAR (#find-car) ================= -->
+    <section class="page-view" id="view-find-car">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--primary-600);">Wayfinding & Navigation</span>
+          <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-top: 0.2rem;">Find My Parked Car</h1>
+          <p style="font-size: 0.875rem; color: var(--text-muted);">Locate your vehicle bay, review live remaining time, and follow dynamic indoor wayfinding.</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; max-width: 380px; width: 100%;">
+          <input type="text" id="findCarPlateInput" class="form-control" placeholder="Enter Vehicle Plate (e.g. TN 38 BR 8899)" style="text-transform: uppercase; font-family: 'JetBrains Mono', monospace;">
+          <button class="btn btn-primary" onclick="searchCarLocation()">Locate</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12" style="gap: 1.5rem;">
+        <!-- Left: Active Vehicle Card (5 Cols) -->
+        <div class="col-span-5" id="carDetailsContainer">
+          <!-- Injected dynamically via script.js -->
+        </div>
+
+        <!-- Right: Dynamic Floor Wayfinding Canvas (7 Cols) -->
+        <div class="col-span-7">
+          <div class="card" style="padding: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+              <div>
+                <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main);">Indoor Wayfinding Map</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted);" id="wayfindingLocationLabel">Parking Structure Layout</p>
+              </div>
+              <div style="display: flex; gap: 0.75rem; font-size: 0.75rem; font-weight: 700;">
+                <span style="display: flex; align-items: center; gap: 0.3rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--primary-600);"></span> Your Car</span>
+                <span style="display: flex; align-items: center; gap: 0.3rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--success-500);"></span> Entry Gate</span>
+                <span style="display: flex; align-items: center; gap: 0.3rem;"><span style="width: 10px; height: 10px; border-radius: 2px; background: var(--border-medium);"></span> Other Bays</span>
+              </div>
+            </div>
+
+            <!-- Dynamically Generated Floor Plan Grid -->
+            <div class="wayfinding-grid-canvas" id="floorPlanCanvas">
+              <!-- Dynamically constructed from booked facility's actual structure -->
+            </div>
+
+            <!-- Walking Directions -->
+            <div style="margin-top: 1.25rem; padding: 1rem; border-radius: var(--radius-md); background: var(--primary-50); border: 1px solid var(--primary-100); display: flex; gap: 0.75rem; align-items: flex-start;">
+              <div style="font-size: 1.4rem;">🚶‍♂️</div>
+              <div>
+                <strong style="font-size: 0.85rem; color: var(--primary-900); display: block; margin-bottom: 0.2rem;">Step-by-step Pedestrian Directions</strong>
+                <p style="font-size: 0.825rem; color: var(--primary-800); margin: 0; line-height: 1.5;" id="directionsText">Search for your vehicle plate or ref code above to generate live walking directions.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= 5. CUSTOMER: DEMAND INSIGHTS (#forecast) ================= -->
+    <section class="page-view" id="view-forecast">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--primary-600);">Parking Intelligence</span>
+          <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-top: 0.2rem;">Parking Demand & Availability Insights</h1>
+          <p style="font-size: 0.875rem; color: var(--text-muted);">Historical check-in frequency analysis to help you time your arrival and avoid congestion.</p>
+        </div>
+        <button class="btn btn-outline-primary btn-sm" onclick="loadDemandForecastPage()">Refresh Insights</button>
+      </div>
+
+      <!-- Overview 4-Period Cards (Morning, Afternoon, Evening, Night) -->
+      <div class="demand-overview-grid" style="margin-bottom: 1.5rem;" id="demandPeriodsOverview">
+        <!-- Injected dynamically via script.js -->
+      </div>
+
+      <div class="grid grid-cols-12" style="gap: 1.5rem;">
+        <!-- Timeline Cards (8 Cols) -->
+        <div class="col-span-8">
+          <div class="card" style="padding: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+              <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main);">Daily Operational Congestion Windows</h3>
+              <span class="badge badge-warning badge-pill" id="forecastPeakBadge">Peak Hours: 5:00 PM — 8:00 PM</span>
+            </div>
+            <div id="forecastCardsList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <!-- Injected via JavaScript -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Insights & Recommendation Summary Box (4 Cols) -->
+        <div class="col-span-4">
+          <div class="card" style="padding: 1.5rem;">
+            <span class="badge badge-primary" style="margin-bottom: 0.75rem;">Smart Advisory</span>
+            <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); margin-bottom: 1rem;">Parking Outlook</h3>
+
+            <div style="margin-bottom: 1.25rem;">
+              <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Peak Operating Hours</div>
+              <div style="font-size: 1.2rem; font-weight: 800; color: var(--text-main);" id="insightPeakHours">5:00 PM — 8:00 PM</div>
+            </div>
+
+            <div style="margin-bottom: 1.25rem;">
+              <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Expected Daily Demand</div>
+              <div style="font-size: 1.4rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--primary-600);" id="insightDemandMeter">82%</div>
+              <div class="demand-meter">
+                <div class="demand-meter-fill danger" id="insightDemandBar" style="width: 82%;"></div>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 1.25rem;">
+              <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Availability Status</div>
+              <span class="badge badge-warning" id="insightAvailabilityStatus">Limited Spots</span>
+            </div>
+
+            <div style="padding: 1rem; border-radius: var(--radius-md); background: var(--success-50); border: 1px solid var(--success-100);">
+              <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--success-700); font-weight: 800; margin-bottom: 0.2rem;">Recommended Arrival Time</div>
+              <div style="font-size: 1.05rem; font-weight: 800; color: var(--success-700);" id="insightRecommendedTime">Before 4:30 PM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= 6. CUSTOMER: BOOKING HISTORY (#history) ================= -->
+    <section class="page-view" id="view-history">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--primary-600);">Passes & Receipts</span>
+          <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-top: 0.2rem;">My Booking History</h1>
+          <p style="font-size: 0.875rem; color: var(--text-muted);">View active passes, extend current sessions, and rate completed parking.</p>
+        </div>
+        <button class="btn btn-outline-primary btn-sm" onclick="loadCustomerBookings()">Refresh</button>
+      </div>
+
+      <div class="card" style="padding: 1.5rem;">
+        <div id="customerBookingsList" style="display: flex; flex-direction: column; gap: 1rem;">
+          <!-- Injected via JavaScript -->
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= 7. OWNER: DASHBOARD (#owner-dashboard) ================= -->
+    <section class="page-view" id="view-owner-dashboard">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <span class="badge badge-success" style="margin-bottom: 0.25rem;">Owner Workspace</span>
+          <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-top: 0.2rem;">Owner Operations & Revenue</h1>
+          <p style="font-size: 0.875rem; color: var(--text-muted);">Monitor real-time bay occupancy, track revenue, and manage customer gate check-ins.</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-primary btn-sm" onclick="openAddSpaceModal()">+ Add Parking Space</button>
+          <button class="btn btn-outline-primary btn-sm" onclick="loadOwnerDashboard()">Refresh</button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div class="grid grid-cols-4" style="margin-bottom: 1.5rem;">
+        <div class="kpi-card">
+          <div>
+            <div class="kpi-num" id="ownerKpiRevenue">₹0</div>
+            <div class="kpi-label">Gross Earnings</div>
+          </div>
+          <div style="font-size: 1.75rem; color: var(--success-600);">💰</div>
+        </div>
+        <div class="kpi-card">
+          <div>
+            <div class="kpi-num" id="ownerKpiOccupancy">0%</div>
+            <div class="kpi-label">Active Occupancy</div>
+          </div>
+          <div style="font-size: 1.75rem; color: var(--primary-600);">🅿️</div>
+        </div>
+        <div class="kpi-card">
+          <div>
+            <div class="kpi-num" id="ownerKpiTotalBookings">0</div>
+            <div class="kpi-label">Total Bookings</div>
+          </div>
+          <div style="font-size: 1.75rem; color: var(--warning-600);">📋</div>
+        </div>
+        <div class="kpi-card">
+          <div>
+            <div class="kpi-num" id="ownerKpiRating">4.9 ★</div>
+            <div class="kpi-label">Satisfaction Score</div>
+          </div>
+          <div style="font-size: 1.75rem; color: #eab308;">⭐</div>
+        </div>
+      </div>
+
+      <!-- Incoming Customer Bookings Table -->
+      <div class="card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+          <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main);">Live Customer Check-Ins & Bookings</h3>
+          <button class="btn btn-secondary btn-sm" onclick="navigateTo('owner-bookings')">View All →</button>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table" id="ownerRecentBookingsTable">
+            <thead>
+              <tr>
+                <th>Booking Ref</th>
+                <th>Vehicle & Driver</th>
+                <th>Facility & Bay</th>
+                <th>Session Period</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Gate Action</th>
+              </tr>
+            </thead>
+            <tbody id="ownerRecentBookingsBody">
+              <!-- Injected via JavaScript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= 8. OWNER: MY SPACES & BAYS (#owner-spaces) ================= -->
+    <section class="page-view" id="view-owner-spaces">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <span class="badge badge-success">Facility Management</span>
+          <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-top: 0.2rem;">My Parking Spaces & Bay Controls</h1>
+          <p style="font-size: 0.875rem; color: var(--text-muted);">Manage your facilities, toggle bay maintenance states, and update hourly tariffs.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openAddSpaceModal()">+ Add New Facility</button>
+      </div>
+
+      <div class="grid grid-cols-12" style="gap: 1.5rem;">
+        <!-- Left: Spaces List (4 Cols) -->
+        <div class="col-span-4" id="ownerSpacesList" style="display: flex; flex-direction: column; gap: 1rem;">
+          <!-- Injected via JavaScript -->
+        </div>
+
+        <!-- Right: Bay Matrix Editor for Selected Facility (8 Cols) -->
+        <div class="col-span-8">
+          <div class="card" style="padding: 1.5rem;" id="ownerSpaceEditorCard">
+            <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); margin-bottom: 1rem;" id="ownerEditorTitle">Select a facility on the left to manage slots</h3>
+            <div id="ownerSlotEditorGrid"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= 9. OWNER: BOOKINGS (#owner-bookings) ================= -->
+    <section class="page-view" id="view-owner-bookings">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <span class="badge badge-success">Customer Sessions</span>
+          <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-top: 0.2rem;">Customer Bookings & Gate Verification</h1>
+          <p style="font-size: 0.875rem; color: var(--text-muted);">Verify driver entry passes, check in vehicles, and record checkout completions.</p>
+        </div>
+        <button class="btn btn-outline-primary btn-sm" onclick="loadOwnerBookings()">Refresh</button>
+      </div>
+
+      <div class="card" style="padding: 1.5rem;">
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Ref Code</th>
+                <th>Customer Contact</th>
+                <th>Facility & Bay</th>
+                <th>Time Window</th>
+                <th>Total Paid</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="ownerAllBookingsBody">
+              <!-- Injected via JavaScript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= 10. OWNER: EARNINGS (#owner-earnings) ================= -->
+    <section class="page-view" id="view-owner-earnings">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <span class="badge badge-success">Financial Ledger</span>
+          <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-top: 0.2rem;">Revenue & Financial Statements</h1>
+          <p style="font-size: 0.875rem; color: var(--text-muted);">Review payout settlements, customer transaction fees, and facility revenue distribution.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12" style="gap: 1.5rem;">
+        <div class="col-span-8">
+          <div class="card" style="padding: 1.5rem;">
+            <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); margin-bottom: 1rem;">Facility Revenue Breakdown</h3>
+            <div id="ownerEarningsFacilityList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <!-- Injected via JavaScript -->
+            </div>
+          </div>
+        </div>
+
+        <div class="col-span-4">
+          <div class="card" style="padding: 1.5rem;">
+            <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); margin-bottom: 1rem;">Settlement Summary</h3>
+            <div style="padding: 1rem; border-radius: var(--radius-md); background: var(--bg-subtle); margin-bottom: 1rem;">
+              <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Net Settled Payouts</span>
+              <div style="font-size: 1.8rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--success-600);" id="ownerSettledAmount">₹0</div>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-muted);">Payouts are automatically reconciled daily to your registered bank account with zero gateway deduction.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+
+  <!-- ================= NATIVE SEMANTIC MODALS ================= -->
+
+  <!-- 1. AUTHENTICATION MODAL (Empty inputs, clean state, zero pre-fill) -->
+  <div class="modal-backdrop" id="authModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title" id="authModalTitle">Sign in to ParkFind</h5>
+          <p class="modal-subtitle">Choose your account role to proceed</p>
+        </div>
+        <button class="modal-close-btn" onclick="closeModal('authModal')">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Role Tabs -->
+        <div style="display: flex; border-radius: var(--radius-md); background: var(--bg-subtle); padding: 4px; margin-bottom: 1.25rem;">
+          <button class="flex-1 btn btn-sm" id="authTabCustomer" style="background: var(--bg-surface); color: var(--primary-600); font-weight: 800; box-shadow: var(--shadow-sm);" onclick="switchAuthRole('customer')">🚗 Customer</button>
+          <button class="flex-1 btn btn-sm" id="authTabOwner" style="color: var(--text-muted); font-weight: 700;" onclick="switchAuthRole('owner')">🏢 Parking Owner</button>
+        </div>
+
+        <!-- Auth Form -->
+        <form id="authForm" onsubmit="handleAuthSubmit(event)" style="display: flex; flex-direction: column; gap: 0.85rem;">
+          <div id="registerNameField" style="display: none;">
+            <label class="form-label">Full Name</label>
+            <input type="text" id="authFullName" class="form-control" placeholder="e.g. Raveendran K">
+          </div>
+
+          <div id="registerPhoneField" style="display: none;">
+            <label class="form-label">Phone Number</label>
+            <input type="tel" id="authPhone" class="form-control" placeholder="e.g. +91 98422 10101">
+          </div>
+
+          <div>
+            <label class="form-label">Email Address</label>
+            <input type="email" id="authEmail" class="form-control" placeholder="name@example.com" required autocomplete="off">
+          </div>
+
+          <div>
+            <label class="form-label">Password</label>
+            <input type="password" id="authPassword" class="form-control" placeholder="••••••••" required autocomplete="off">
+          </div>
+
+          <button type="submit" id="authSubmitBtn" class="btn btn-primary btn-block btn-lg" style="margin-top: 0.5rem;">
+            Sign In
+          </button>
+
+          <div style="text-align: center; margin-top: 0.5rem;">
+            <button type="button" style="font-size: 0.8rem; color: var(--primary-600); font-weight: 700;" id="toggleAuthModeBtn" onclick="toggleAuthMode()">
+              Don't have an account? Create one
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 2. DEMO PAYMENT CHECKOUT MODAL -->
+  <div class="modal-backdrop" id="paymentModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--success-50); color: var(--success-700); display: flex; align-items: center; justify-content: center; font-weight: 800;">₹</div>
+          <div>
+            <h5 class="modal-title">Confirm & Pay Parking Fee</h5>
+            <p class="modal-subtitle">Secure Demo Payment Checkout</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeModal('paymentModal')">✕</button>
+      </div>
+
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+        <div style="padding: 1rem; border-radius: var(--radius-md); background: var(--bg-subtle); font-size: 0.85rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem;">
+            <span style="color: var(--text-muted);">Facility:</span>
+            <strong id="payLocationName">RS Puram Secure Parking</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem;">
+            <span style="color: var(--text-muted);">Reserved Bay:</span>
+            <strong style="color: var(--primary-600); font-family: 'JetBrains Mono', monospace;" id="paySlotNo">A-06</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Duration:</span>
+            <span id="payDuration">1 Hour</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label">Payment Method</label>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <label style="display: flex; align-items: center; gap: 0.6rem; padding: 0.65rem 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); cursor: pointer;">
+              <input type="radio" name="payMethod" value="upi" checked>
+              <strong>UPI (Google Pay / PhonePe / Paytm)</strong>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.6rem; padding: 0.65rem 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); cursor: pointer;">
+              <input type="radio" name="payMethod" value="card">
+              <strong>Debit / Credit Card</strong>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.6rem; padding: 0.65rem 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); cursor: pointer;">
+              <input type="radio" name="payMethod" value="netbanking">
+              <strong>Net Banking</strong>
+            </label>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 0.75rem; border-top: 1px solid var(--border-subtle);">
+          <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 700;">Amount Due:</span>
+          <span style="font-size: 1.5rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--success-600);" id="payTotalAmount">₹40</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('paymentModal')">Cancel</button>
+        <button class="btn btn-success" id="confirmPayBtn" onclick="executeBookingPayment()">
+          Pay & Generate Entry Pass
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 3. DIGITAL ENTRY PASS MODAL (Printable) -->
+  <div class="modal-backdrop" id="passModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title">Digital Parking Pass</h5>
+          <p class="modal-subtitle">Present at facility entry gate</p>
+        </div>
+        <button class="modal-close-btn" onclick="closeModal('passModal')">✕</button>
+      </div>
+
+      <div class="modal-body" style="text-align: center;" id="passPrintableArea">
+        <div style="border: 2px dashed var(--primary-500); border-radius: var(--radius-lg); padding: 1.5rem; background: var(--bg-surface);">
+          <span class="badge badge-success badge-pill" style="margin-bottom: 0.75rem;">Confirmed Pass</span>
+          <div style="font-size: 1.4rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--primary-600); margin-bottom: 0.25rem;" id="passBookingRef">PKF-2026-A892</div>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;" id="passTxnRef">Txn: PAY-TXN-2026-A89211</p>
+
+          <div style="margin: 1rem auto; width: 140px; height: 140px; border-radius: var(--radius-md); background: var(--bg-subtle); display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid var(--border-medium);">
+            <div style="font-size: 2.5rem;">📱</div>
+            <span style="font-size: 0.65rem; color: var(--text-dim); font-family: 'JetBrains Mono', monospace;">GATE QR SCAN</span>
+          </div>
+
+          <div style="text-align: left; font-size: 0.85rem; display: flex; flex-direction: column; gap: 0.4rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Facility:</span><strong id="passFacility">RS Puram Secure Parking</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Reserved Bay:</span><strong style="color: var(--primary-600); font-family: 'JetBrains Mono', monospace;" id="passSlot">A-06</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Vehicle:</span><strong style="font-family: 'JetBrains Mono', monospace;" id="passVehicle">TN 38 BR 8899</strong></div>
+            <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Valid Until:</span><strong id="passValidUntil">Today, 2:30 PM</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="window.print()">🖨️ Print Pass</button>
+        <button class="btn btn-primary" onclick="closeModal('passModal'); navigateTo('find-car');">Wayfinding →</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 4. OWNER: ADD PARKING SPACE MODAL -->
+  <div class="modal-backdrop" id="addSpaceModal">
+    <div class="modal-window modal-lg">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title">List a New Parking Space</h5>
+          <p class="modal-subtitle">Publish your facility and configure bay layouts</p>
+        </div>
+        <button class="modal-close-btn" onclick="closeModal('addSpaceModal')">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <form id="addSpaceForm" onsubmit="handleAddSpaceSubmit(event)">
+          <div class="grid grid-cols-2" style="gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <label class="form-label">Facility Name</label>
+              <input type="text" id="newSpaceName" class="form-control" placeholder="e.g. City Center Multilevel" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Area / Locality</label>
+              <input type="text" id="newSpaceArea" class="form-control" placeholder="e.g. RS Puram, Gandhipuram" required>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3" style="gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <label class="form-label">City</label>
+              <input type="text" id="newSpaceCity" class="form-control" value="Coimbatore" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">State</label>
+              <input type="text" id="newSpaceState" class="form-control" value="Tamil Nadu" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Country</label>
+              <input type="text" id="newSpaceCountry" class="form-control" value="India" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Full Street Address</label>
+            <input type="text" id="newSpaceAddress" class="form-control" placeholder="e.g. 104, DB Road, Corner Junction" required>
+          </div>
+
+          <div class="grid grid-cols-3" style="gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <label class="form-label">Hourly Rate (₹)</label>
+              <input type="number" id="newSpaceRate" class="form-control" value="40" min="1" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Total Bays</label>
+              <input type="number" id="newSpaceCapacity" class="form-control" value="16" min="2" max="100" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Operating Hours</label>
+              <div style="display: flex; gap: 0.3rem;">
+                <input type="time" id="newSpaceOpen" class="form-control" value="06:00">
+                <input type="time" id="newSpaceClose" class="form-control" value="23:30">
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2" style="gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <label class="form-label">Latitude</label>
+              <input type="number" id="newSpaceLat" step="any" class="form-control" value="11.0168" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Longitude</label>
+              <input type="number" id="newSpaceLng" step="any" class="form-control" value="76.9558" required>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; font-size: 0.85rem;">
+            <label><input type="checkbox" id="newSpaceCovered" checked> Covered</label>
+            <label><input type="checkbox" id="newSpaceEv"> EV Charging</label>
+            <label><input type="checkbox" id="newSpace247"> 24/7 Access</label>
+            <label><input type="checkbox" id="newSpaceAccessible" checked> Accessible</label>
+          </div>
+
+          <div class="modal-footer" style="padding: 1rem 0 0 0; margin-top: 1rem;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('addSpaceModal')">Cancel</button>
+            <button type="submit" class="btn btn-primary">Publish Facility & Generate Slots</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 5. REVIEW MODAL -->
+  <div class="modal-backdrop" id="reviewModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title">Rate Parking Experience</h5>
+          <p class="modal-subtitle">Help other drivers find quality spots</p>
+        </div>
+        <button class="modal-close-btn" onclick="closeModal('reviewModal')">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <form id="reviewForm" onsubmit="handleReviewSubmit(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+          <input type="hidden" id="reviewBookingId">
+          <input type="hidden" id="reviewLocationId">
+
+          <div>
+            <label class="form-label">Rating</label>
+            <div style="display: flex; gap: 0.5rem;" id="ratingStarContainer">
+              <button type="button" class="btn btn-secondary btn-sm star-btn" data-star="1" onclick="setRating(1)">1 ★</button>
+              <button type="button" class="btn btn-secondary btn-sm star-btn" data-star="2" onclick="setRating(2)">2 ★</button>
+              <button type="button" class="btn btn-secondary btn-sm star-btn" data-star="3" onclick="setRating(3)">3 ★</button>
+              <button type="button" class="btn btn-secondary btn-sm star-btn" data-star="4" onclick="setRating(4)">4 ★</button>
+              <button type="button" class="btn btn-primary btn-sm star-btn" data-star="5" onclick="setRating(5)">5 ★</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Feedback / Comments</label>
+            <textarea id="reviewComment" class="form-control" rows="3" placeholder="How was the parking surface, security, and ease of entry?"></textarea>
+          </div>
+
+          <div class="modal-footer" style="padding: 1rem 0 0 0;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('reviewModal')">Skip</button>
+            <button type="submit" class="btn btn-primary">Submit Rating</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet Map JS CDN -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- ParkFind Frontend Vanilla JavaScript Application -->
+  <script src="script.js"></script>
+</body>
+</html>

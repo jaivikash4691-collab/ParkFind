@@ -1,0 +1,30 @@
+{
+  "name": "parkfind-backend",
+  "version": "1.0.0",
+  "description": "ParkFind Smart Parking Management System — Backend REST API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node utils/seed.js",
+    "test": "node utils/testSuite.js",
+    "e2e": "node utils/e2eSimulation.js"
+  },
+  "keywords": [
+    "parking",
+    "smart-parking",
+    "express",
+    "mysql2",
+    "rest-api"
+  ],
+  "author": "ParkFind Team",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.9.7"
+  }
+}
