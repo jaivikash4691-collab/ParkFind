@@ -1,18 +1,20 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useActiveSession } from '../../context/ActiveSessionContext';
+import { useAuth } from '../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BorderGlow } from '../animation/BorderGlow';
 import { GlareHover } from '../animation/GlareHover';
 import { Clock, Navigation, Plus } from 'lucide-react';
 
 export function ActiveSessionBanner() {
+  const { isAuthenticated } = useAuth();
   const { activeSession, formattedRemainingTime, quickExtend } = useActiveSession();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Hide on find-car page to avoid repetition
-  if (!activeSession || location.pathname === '/find-car') {
+  // Hide for unauthenticated visitors, or when no session, or on find-car page to avoid repetition
+  if (!isAuthenticated || !activeSession || location.pathname === '/find-car') {
     return null;
   }
 

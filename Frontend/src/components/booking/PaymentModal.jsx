@@ -5,6 +5,7 @@ import { LatticeLoader } from '../animation/LatticeLoader';
 import { GlareHover } from '../animation/GlareHover';
 import { useToast } from '../../context/ToastContext';
 import { useActiveSession } from '../../context/ActiveSessionContext';
+import { useAuth } from '../../context/AuthContext';
 import { CreditCard, Smartphone, Landmark, Wallet, Banknote, ShieldCheck } from 'lucide-react';
 
 export function PaymentModal({
@@ -20,6 +21,7 @@ export function PaymentModal({
 }) {
   const { showToast } = useToast();
   const { refreshActiveSession } = useActiveSession();
+  const { isAuthenticated } = useAuth();
 
   const [paymentMethod, setPaymentMethod] = useState('upi');
   const [processing, setProcessing] = useState(false);
@@ -31,6 +33,11 @@ export function PaymentModal({
   const slotNo = slot.slot_no || slot.slotNo;
 
   const handleConfirmPay = async () => {
+    if (!isAuthenticated) {
+      showToast('Please sign in to reserve your parking spot.', 'warning');
+      onClose();
+      return;
+    }
     setProcessing(true);
     try {
       const payload = {

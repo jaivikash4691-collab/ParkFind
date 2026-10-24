@@ -6,14 +6,17 @@ import { ToastProvider } from './context/ToastContext';
 import { ActiveSessionProvider } from './context/ActiveSessionContext';
 import { Navbar } from './components/navigation/Navbar';
 import { ActiveSessionBanner } from './components/navigation/ActiveSessionBanner';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
 // Pages
+import { PublicLandingPage } from './pages/PublicLandingPage';
 import { DiscoverPage } from './pages/DiscoverPage';
 import { ExplorePage } from './pages/ExplorePage';
 import { BookingPage } from './pages/BookingPage';
 import { FindMyCarPage } from './pages/FindMyCarPage';
 import { DemandInsightsPage } from './pages/DemandInsightsPage';
 import { BookingsHistoryPage } from './pages/BookingsHistoryPage';
+import { LoginPage } from './pages/LoginPage';
 import { OwnerDashboardPage } from './pages/OwnerDashboardPage';
 import { OwnerSpacesPage } from './pages/OwnerSpacesPage';
 import { OwnerBookingsPage } from './pages/OwnerBookingsPage';
@@ -26,13 +29,15 @@ function OwnerRoute({ children }) {
   if (loading) return null;
 
   if (!user || !isOwner) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login?role=owner&redirect=/owner" replace />;
   }
 
   return children;
 }
 
 export function AppContent() {
+  const { isAuthenticated, loading } = useAuth();
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
@@ -40,15 +45,75 @@ export function AppContent() {
 
       <main className="main-content flex-1">
         <Routes>
-          {/* Customer Routes */}
-          <Route path="/" element={<DiscoverPage />} />
-          <Route path="/explore" element={<ExplorePage />} />
-          <Route path="/parking/:id" element={<BookingPage />} />
+          {/* Landing / Discover Route: Public Landing when signed out; Full Discovery when signed in */}
+          <Route
+            path="/"
+            element={
+              loading ? null : isAuthenticated ? (
+                <DiscoverPage />
+              ) : (
+                <PublicLandingPage />
+              )
+            }
+          />
+
+          {/* Authentication Routes (Public) */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signin" element={<LoginPage />} />
+          <Route path="/register" element={<LoginPage />} />
+
+          {/* Protected Exploration, Map & Facility Booking Routes */}
+          <Route
+            path="/explore"
+            element={
+              <ProtectedRoute>
+                <ExplorePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parking/:id"
+            element={
+              <ProtectedRoute>
+                <BookingPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/booking" element={<Navigate to="/explore" replace />} />
-          <Route path="/find-car" element={<FindMyCarPage />} />
-          <Route path="/find-my-car" element={<FindMyCarPage />} />
-          <Route path="/insights" element={<DemandInsightsPage />} />
-          <Route path="/bookings" element={<BookingsHistoryPage />} />
+
+          {/* Customer Protected Routes (Requires active authenticated session) */}
+          <Route
+            path="/bookings"
+            element={
+              <ProtectedRoute>
+                <BookingsHistoryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/find-car"
+            element={
+              <ProtectedRoute>
+                <FindMyCarPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/find-my-car"
+            element={
+              <ProtectedRoute>
+                <FindMyCarPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/insights"
+            element={
+              <ProtectedRoute>
+                <DemandInsightsPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Owner Protected Routes */}
           <Route

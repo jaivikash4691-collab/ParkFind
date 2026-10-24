@@ -4,14 +4,21 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Car, Building2, Eye, EyeOff, Lock, Mail, Phone, User } from 'lucide-react';
 
-export function AuthModal({ isOpen, onClose, initialRole = 'customer' }) {
+export function AuthModal({ isOpen, onClose, initialRole = 'customer', initialMode = 'login', onSuccess }) {
   const { login, register } = useAuth();
   const { showToast } = useToast();
 
   const [role, setRole] = useState(initialRole);
-  const [isRegister, setIsRegister] = useState(false);
+  const [isRegister, setIsRegister] = useState(initialMode === 'register');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setIsRegister(initialMode === 'register');
+      setRole(initialRole);
+    }
+  }, [isOpen, initialMode, initialRole]);
 
   // Form state (always clean initial state)
   const [formData, setFormData] = useState({
@@ -65,6 +72,9 @@ export function AuthModal({ isOpen, onClose, initialRole = 'customer' }) {
         showToast('Signed in successfully.', 'success');
       }
 
+      if (onSuccess) {
+        onSuccess();
+      }
       handleClose();
     } catch (err) {
       showToast(err.message || 'Authentication failed', 'danger');

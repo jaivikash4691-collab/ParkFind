@@ -4,10 +4,10 @@ const locationController = require('../controllers/locationController');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { validateLocationInput } = require('../middleware/validation');
 
-// Public routes
-router.get('/meta/cities', locationController.getCities);
-router.get('/', locationController.getAllLocations);
-router.get('/:id', locationController.getLocationById);
+// Protected routes (Mandatory Authentication Required for Search & Exploration)
+router.get('/meta/cities', requireAuth, locationController.getCities);
+router.get('/', requireAuth, locationController.getAllLocations);
+router.get('/:id', requireAuth, locationController.getLocationById);
 
 // Owner-only protected routes
 router.get('/owner/my-locations', requireAuth, requireRole('owner'), locationController.getOwnerLocations);

@@ -10,6 +10,7 @@ import { LatticeLoader } from '../components/animation/LatticeLoader';
 import { GlareHover } from '../components/animation/GlareHover';
 import { BorderGlow } from '../components/animation/BorderGlow';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import {
   Search,
   MapPin,
@@ -27,6 +28,7 @@ import {
 export function DiscoverPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { isAuthenticated } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [locations, setLocations] = useState([]);
@@ -61,14 +63,30 @@ export function DiscoverPage() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    if (!isAuthenticated) {
+      showToast('Please sign in to access Parkit and search parking spaces.', 'warning');
+      const target = searchQuery.trim() ? `/explore?search=${encodeURIComponent(searchQuery.trim())}` : '/explore';
+      navigate(`/login?redirect=${encodeURIComponent(target)}`);
+      return;
+    }
     navigate(`/explore?search=${encodeURIComponent(searchQuery)}`);
   };
 
   const handleFilterArea = (area) => {
+    if (!isAuthenticated) {
+      showToast(`Please sign in to view parking facilities in ${area}.`, 'warning');
+      navigate(`/login?redirect=${encodeURIComponent(`/explore?area=${encodeURIComponent(area)}`)}`);
+      return;
+    }
     navigate(`/explore?area=${encodeURIComponent(area)}`);
   };
 
   const handleUseGps = () => {
+    if (!isAuthenticated) {
+      showToast('Please sign in to locate nearby parking using GPS.', 'warning');
+      navigate(`/login?redirect=${encodeURIComponent('/explore?sort=nearest')}`);
+      return;
+    }
     if (!navigator.geolocation) {
       showToast('Geolocation is not supported by your browser', 'warning');
       return;
@@ -315,7 +333,14 @@ export function DiscoverPage() {
 
                 <GlareHover borderRadius="var(--radius-md)" glareColor="rgba(255,255,255,0.35)" glareOpacity={0.4}>
                   <button
-                    onClick={() => navigate(`/parking/${recommendation.id}`)}
+                    onClick={() => {
+                      if (!isAuthenticated) {
+                        showToast('Please sign in to reserve your parking spot.', 'warning');
+                        navigate(`/login?redirect=${encodeURIComponent(`/parking/${recommendation.id}`)}`);
+                        return;
+                      }
+                      navigate(`/parking/${recommendation.id}`);
+                    }}
                     className="btn btn-primary"
                     style={{ gap: 8 }}
                   >
@@ -341,7 +366,14 @@ export function DiscoverPage() {
             </h2>
           </div>
           <button
-            onClick={() => navigate('/explore')}
+            onClick={() => {
+              if (!isAuthenticated) {
+                showToast('Please sign in to access the interactive parking map.', 'warning');
+                navigate(`/login?redirect=${encodeURIComponent('/explore')}`);
+                return;
+              }
+              navigate('/explore');
+            }}
             className="btn btn-outline btn-sm"
             style={{ gap: 6 }}
           >
@@ -356,7 +388,14 @@ export function DiscoverPage() {
             const CardInner = (
               <div
                 className="card card-interactive"
-                onClick={() => navigate(`/parking/${loc.id}`)}
+                onClick={() => {
+                  if (!isAuthenticated) {
+                    showToast('Please sign in to access parking facility details.', 'warning');
+                    navigate(`/login?redirect=${encodeURIComponent(`/parking/${loc.id}`)}`);
+                    return;
+                  }
+                  navigate(`/parking/${loc.id}`);
+                }}
                 style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}
               >
                 {/* Location Image */}
@@ -444,6 +483,11 @@ export function DiscoverPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (!isAuthenticated) {
+                          showToast('Please sign in to reserve parking spots.', 'warning');
+                          navigate(`/login?redirect=${encodeURIComponent(`/parking/${loc.id}`)}`);
+                          return;
+                        }
                         navigate(`/parking/${loc.id}`);
                       }}
                       className="btn btn-primary btn-sm"

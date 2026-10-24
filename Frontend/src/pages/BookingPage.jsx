@@ -25,7 +25,7 @@ import {
 export function BookingPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { showToast } = useToast();
 
   const [location, setLocation] = useState(null);
@@ -39,12 +39,20 @@ export function BookingPage() {
   const [driverName, setDriverName] = useState(user?.full_name || '');
   const [driverPhone, setDriverPhone] = useState(user?.phone || '');
 
+  // Keep driver details synced with authenticated user profile
+  useEffect(() => {
+    if (user) {
+      setDriverName((prev) => prev || user.full_name || '');
+      setDriverPhone((prev) => prev || user.phone || '');
+    }
+  }, [user]);
+
   // Modals
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [passModalOpen, setPassModalOpen] = useState(false);
   const [bookingResult, setBookingResult] = useState(null);
 
-  // Load facility data
+  // Load facility data and restore any preserved booking selection
   useEffect(() => {
     async function fetchDetail() {
       try {
@@ -53,8 +61,38 @@ export function BookingPage() {
         setLocation(data);
 
         // Default floor
+        let chosenFloorId = null;
         if (data.floors && data.floors.length > 0) {
-          setActiveFloorId(data.floors[0].id);
+          chosenFloorId = data.floors[0].id;
+          setActiveFloorId(chosenFloorId);
+        }
+
+        // Restore pending booking selections from session storage if returning from Sign In
+        try {
+          const pendingRaw = sessionStorage.getItem('parkit_pending_booking');
+          if (pendingRaw) {
+            const pending = JSON.parse(pendingRaw);
+            sessionStorage.removeItem('parkit_pending_booking');
+
+            if (String(pending.locationId) === String(id)) {
+              if (pending.duration) setDuration(pending.duration);
+              if (pending.vehicleNumber) setVehicleNumber(pending.vehicleNumber);
+              if (pending.floorId) setActiveFloorId(pending.floorId);
+
+              // Revalidate availability of the preserved bay
+              const allSlots = data.floors?.flatMap(f => f.slots) || data.slots || [];
+              const matchedSlot = allSlots.find(s => String(s.id) === String(pending.slotId));
+
+              if (matchedSlot && matchedSlot.status === 'available') {
+                setSelectedSlot(matchedSlot);
+                showToast(`Restored your selection: Bay ${matchedSlot.slot_no}`, 'success');
+              } else if (matchedSlot) {
+                showToast(`Bay ${matchedSlot.slot_no} was just reserved by someone else. Please pick an available bay.`, 'warning');
+              }
+            }
+          }
+        } catch (e) {
+          // ignore parse errors
         }
       } catch (err) {
         showToast(`Failed to load facility: ${err.message}`, 'danger');
@@ -63,7 +101,7 @@ export function BookingPage() {
       }
     }
     fetchDetail();
-  }, [id]);
+  }, [id, showToast]);
 
   if (loading) {
     return (
@@ -102,6 +140,27 @@ export function BookingPage() {
   };
 
   const handleOpenPayment = () => {
+    // Unauthenticated visitors must sign in before reserving
+    if (!isAuthenticated) {
+      showToast('Please sign in to reserve your parking spot.', 'warning');
+      try {
+        sessionStorage.setItem(
+          'parkit_pending_booking',
+          JSON.stringify({
+            locationId: id,
+            floorId: activeFloorId,
+            slotId: selectedSlot?.id,
+            duration,
+            vehicleNumber,
+          })
+        );
+      } catch (e) {
+        // ignore
+      }
+      navigate(`/login?redirect=${encodeURIComponent(`/parking/${id}`)}`);
+      return;
+    }
+
     if (!selectedSlot) {
       showToast('Please select an available parking bay first', 'warning');
       return;
@@ -347,11 +406,15 @@ export function BookingPage() {
                 <button
                   type="button"
                   onClick={handleOpenPayment}
-                  disabled={!selectedSlot}
+                  disabled={isAuthenticated && !selectedSlot}
                   className="btn btn-primary btn-block btn-lg"
                   style={{ width: '100%' }}
                 >
-                  {selectedSlot ? 'Proceed to Payment →' : 'Select a Bay to Continue'}
+                  {!isAuthenticated
+                    ? 'Sign In to Reserve Parking →'
+                    : selectedSlot
+                    ? 'Proceed to Payment →'
+                    : 'Select a Bay to Continue'}
                 </button>
               </GlareHover>
             </div>

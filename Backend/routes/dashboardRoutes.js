@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const dashboardController = require('../controllers/dashboardController');
-const { optionalAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
 
-router.get('/stats', optionalAuth, dashboardController.getSummaryStats);
+// GET /api/dashboard/stats - Summary statistics (Protected)
+router.get('/stats', requireAuth, dashboardController.getSummaryStats);
 
 module.exports = router;

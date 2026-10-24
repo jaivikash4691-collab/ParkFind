@@ -62,6 +62,13 @@ async function syncExpiredSessions() {
  */
 async function createBooking(req, res, next) {
   try {
+    // 0. Mandatory Server-Side Authentication Enforcement
+    if (!req.user || !req.user.id) {
+      const error = new Error('Authentication required. Please sign in to reserve a parking spot.');
+      error.statusCode = 401;
+      return next(error);
+    }
+
     const {
       slot_id,
       duration_hours,
@@ -71,7 +78,8 @@ async function createBooking(req, res, next) {
       payment_method = 'upi'
     } = req.body;
 
-    const customerId = req.user ? req.user.id : null;
+    // Derived strictly from verified server-side authentication context, NEVER from client body
+    const customerId = req.user.id;
 
     const bookingResult = await withTransaction(async (connection) => {
       // 1. Pessimistic Row Lock: Lock the selected slot and join location
@@ -257,6 +265,15 @@ async function extendBooking(req, res, next) {
 
       const booking = rows[0];
 
+      // Authorization Check: Must be the customer who booked, or the parking facility owner
+      const isCustomerOwner = req.user && booking.customer_id === req.user.id;
+      const isFacilityOwner = req.user && req.user.role === 'owner' && booking.owner_id === req.user.id;
+      if (!isCustomerOwner && !isFacilityOwner) {
+        const error = new Error('Access forbidden. You do not have permission to modify this booking.');
+        error.statusCode = 403;
+        throw error;
+      }
+
       if (booking.booking_status !== 'active') {
         const error = new Error(`Cannot extend a session that is ${booking.booking_status}.`);
         error.statusCode = 400;
@@ -351,6 +368,15 @@ async function cancelBooking(req, res, next) {
       }
 
       const booking = rows[0];
+
+      // Authorization Check: Must be the customer who booked, or the parking facility owner
+      const isCustomerOwner = req.user && booking.customer_id === req.user.id;
+      const isFacilityOwner = req.user && req.user.role === 'owner' && booking.owner_id === req.user.id;
+      if (!isCustomerOwner && !isFacilityOwner) {
+        const error = new Error('Access forbidden. You do not have permission to cancel this booking.');
+        error.statusCode = 403;
+        throw error;
+      }
 
       if (booking.booking_status !== 'active' && booking.booking_status !== 'confirmed') {
         const error = new Error(`Cannot cancel a booking that is ${booking.booking_status}.`);
@@ -484,6 +510,15 @@ async function getActiveCarLocation(req, res, next) {
     const { plate, ref } = req.query;
     const userId = req.user ? req.user.id : null;
 
+    // Unauthenticated callers without explicit reference or plate cannot access any active session
+    if (!ref && !plate && !userId) {
+      return res.json({
+        success: true,
+        hasActiveCar: false,
+        message: 'No active parking session found.'
+      });
+    }
+
     let query = `
       SELECT b.id, b.booking_ref, b.vehicle_number, b.driver_name, b.driver_phone,
              b.start_time, b.end_time, b.duration_hours, b.total_amount, b.booking_status,
@@ -610,9 +645,16 @@ async function getActiveCarLocation(req, res, next) {
  */
 async function getMyBookings(req, res, next) {
   try {
+    // Enforce server-side authentication
+    if (!req.user || !req.user.id) {
+      const error = new Error('Authentication required to view your booking history.');
+      error.statusCode = 401;
+      return next(error);
+    }
+
     await syncExpiredSessions();
 
-    const userId = req.user ? req.user.id : null;
+    const userId = req.user.id;
     const { status, search } = req.query;
 
     let query = `

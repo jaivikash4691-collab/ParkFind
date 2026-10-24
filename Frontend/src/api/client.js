@@ -11,9 +11,9 @@ export async function apiRequest(endpoint, options = {}) {
     ...(options.headers || {}),
   };
 
-  // Attach stored JWT token if present
+  // Attach stored JWT token from sessionStorage if present
   try {
-    const savedUser = localStorage.getItem('parkit_user');
+    const savedUser = sessionStorage.getItem('parkit_user');
     if (savedUser) {
       const parsed = JSON.parse(savedUser);
       if (parsed.token) {
@@ -38,6 +38,13 @@ export async function apiRequest(endpoint, options = {}) {
   }
 
   if (!response.ok || !data.success) {
+    if (response.status === 401) {
+      try {
+        sessionStorage.removeItem('parkit_user');
+      } catch (e) {
+        // ignore
+      }
+    }
     const errorMessage = data?.message || `HTTP ${response.status}: An error occurred while communicating with the server.`;
     const error = new Error(errorMessage);
     error.status = response.status;
