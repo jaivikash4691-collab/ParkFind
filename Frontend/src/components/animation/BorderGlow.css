@@ -1,0 +1,55 @@
+/* BorderGlow.css - React Bits Pointer-Aware Edge Mesh/Gradient Glow */
+
+.border-glow-wrapper {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  padding: 1.5px; /* Border thickness */
+  overflow: hidden;
+  transition: box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+}
+
+.border-glow-wrapper:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 210, 255, 0.15);
+}
+
+/* Dynamic Halo Effect Layer */
+.border-glow-halo {
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity 0.25s ease;
+  will-change: opacity, background;
+}
+
+/* Subtle Static Base Border */
+.border-glow-substrate {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.1));
+  pointer-events: none;
+  z-index: 2;
+  transition: border-color 0.25s ease;
+}
+
+.border-glow-wrapper:hover .border-glow-substrate {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Inner Surface Container */
+.border-glow-inner {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .border-glow-halo {
+    transition: none !important;
+  }
+}
