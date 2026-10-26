@@ -1,4 +1,19 @@
 const { pool, withTransaction } = require('../config/db');
+const crypto = require('crypto');
+
+/**
+ * Generate a cryptographically random QR pass token (URL-safe base64, 48 bytes of entropy)
+ */
+function generateQrPassToken() {
+  return crypto.randomBytes(48).toString('base64url');
+}
+
+/**
+ * Hash a QR pass token using SHA-256 for secure storage
+ */
+function hashQrToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 /**
  * Generate human-readable booking reference code
@@ -36,17 +51,17 @@ async function syncExpiredSessions() {
     const [expired] = await pool.query(`
       SELECT id, parking_slot_id, booking_ref 
       FROM bookings 
-      WHERE booking_status = 'active' AND end_time < DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+      WHERE booking_status = 'active' AND end_time < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 MINUTE)
     `);
 
     for (const b of expired) {
       await withTransaction(async (conn) => {
         await conn.query(
-          `UPDATE bookings SET booking_status = 'completed', updated_at = NOW() WHERE id = ?`,
+          `UPDATE bookings SET booking_status = 'completed', updated_at = UTC_TIMESTAMP() WHERE id = ?`,
           [b.id]
         );
         await conn.query(
-          `UPDATE parking_slots SET status = 'available', updated_at = NOW() WHERE id = ?`,
+          `UPDATE parking_slots SET status = 'available', updated_at = UTC_TIMESTAMP() WHERE id = ?`,
           [b.parking_slot_id]
         );
       });
@@ -62,6 +77,13 @@ async function syncExpiredSessions() {
  */
 async function createBooking(req, res, next) {
   try {
+    // 0. Mandatory Server-Side Authentication Enforcement
+    if (!req.user || !req.user.id) {
+      const error = new Error('Authentication required. Please sign in to reserve a parking spot.');
+      error.statusCode = 401;
+      return next(error);
+    }
+
     const {
       slot_id,
       duration_hours,
@@ -71,16 +93,19 @@ async function createBooking(req, res, next) {
       payment_method = 'upi'
     } = req.body;
 
-    const customerId = req.user ? req.user.id : null;
+    // Derived strictly from verified server-side authentication context, NEVER from client body
+    const customerId = req.user.id;
 
     const bookingResult = await withTransaction(async (connection) => {
-      // 1. Pessimistic Row Lock: Lock the selected slot and join location
+      // 1. Pessimistic Row Lock: Lock the selected slot and join location and owner UPI profile
       const [slotRows] = await connection.query(
         `SELECT s.id, s.parking_location_id, s.slot_no, s.slot_type, s.bay_row, s.bay_column, s.status,
                 l.name AS location_name, l.address, l.area, l.city, l.hourly_rate, l.latitude, l.longitude,
-                l.owner_id, l.status AS location_status
+                l.owner_id, l.status AS location_status,
+                u.full_name AS owner_name, u.upi_id AS owner_upi_id, u.upi_name AS owner_upi_name, u.upi_description AS owner_upi_desc
          FROM parking_slots s
          INNER JOIN parking_locations l ON s.parking_location_id = l.id
+         LEFT JOIN users u ON l.owner_id = u.id
          WHERE s.id = ?
          FOR UPDATE`,
         [slot_id]
@@ -144,11 +169,17 @@ async function createBooking(req, res, next) {
 
       const bookingId = insertBooking.insertId;
 
-      // 6. Insert Demo Payment record
+      // 6. Direct Owner UPI Payment Setup
+      // Build standard India UPI payment URI: upi://pay?pa=OWNER_UPI_ID&pn=OWNER_NAME&am=AMOUNT&cu=INR&tn=BOOKING_REFERENCE
+      const ownerUpiId = (slot.owner_upi_id && slot.owner_upi_id.trim()) || `owner${slot.owner_id || 1}@okhdfcbank`;
+      const ownerUpiName = (slot.owner_upi_name && slot.owner_upi_name.trim()) || (slot.owner_name && slot.owner_name.trim()) || `${slot.location_name} Parking`;
+      const upiUri = `upi://pay?pa=${encodeURIComponent(ownerUpiId)}&pn=${encodeURIComponent(ownerUpiName)}&am=${totalAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(bookingRef)}`;
+
+      // Record payment as 'pending' until owner confirms receipt
       await connection.query(
         `INSERT INTO payments (
           booking_id, amount, status, payment_method, transaction_reference, paid_at, created_at
-        ) VALUES (?, ?, 'paid', ?, ?, NOW(), NOW())`,
+        ) VALUES (?, ?, 'pending', ?, ?, NULL, UTC_TIMESTAMP())`,
         [bookingId, totalAmount, payment_method, transactionRef]
       );
 
@@ -164,8 +195,8 @@ async function createBooking(req, res, next) {
           `INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'booking')`,
           [
             customerId,
-            'Booking Confirmed!',
-            `Your spot ${slot.slot_no} at ${slot.location_name} is reserved. Paid ₹${totalAmount.toFixed(2)}.`
+            'Booking Reserved — Payment Pending',
+            `Your spot ${slot.slot_no} at ${slot.location_name} is reserved. Please pay ₹${totalAmount.toFixed(2)} via UPI directly to ${ownerUpiName}.`
           ]
         );
       }
@@ -176,10 +207,20 @@ async function createBooking(req, res, next) {
           [
             slot.owner_id,
             'New Customer Booking',
-            `${driver_name} booked Bay ${slot.slot_no} at ${slot.location_name} (${vehicle_number}) for ${duration}h. Received ₹${totalAmount.toFixed(2)}.`
+            `${driver_name} booked Bay ${slot.slot_no} at ${slot.location_name} (${vehicle_number}) for ${duration}h. Total ₹${totalAmount.toFixed(2)} pending UPI verification.`
           ]
         );
       }
+
+      // 9. Generate QR Pass Token
+      const qrPassToken = generateQrPassToken();
+      const qrPassTokenHash = hashQrToken(qrPassToken);
+
+      // Store hash in database (never store the raw token)
+      await connection.query(
+        `UPDATE bookings SET qr_pass_token_hash = ?, qr_pass_status = 'active' WHERE id = ?`,
+        [qrPassTokenHash, bookingId]
+      );
 
       return {
         bookingId,
@@ -204,8 +245,23 @@ async function createBooking(req, res, next) {
         hourlyRate,
         totalAmount,
         paymentMethod: payment_method,
-        paymentStatus: 'paid',
+        paymentStatus: 'pending',
+        ownerUpiId,
+        ownerUpiName,
+        ownerUpiDesc: slot.owner_upi_desc,
+        upiUri,
+        payment: {
+          amount: totalAmount,
+          status: 'pending',
+          method: payment_method,
+          transactionRef,
+          ownerUpiId,
+          ownerUpiName,
+          bookingRef,
+          upiUri
+        },
         bookingStatus: 'active',
+        qrPassToken, // Returned to client once; never stored in plaintext
         startTime,
         endTime,
         directions: `Drive to ${slot.address}, ${slot.area}. Enter through Gate A and follow Row ${slot.bay_row} to Bay ${slot.slot_no}.`
@@ -256,6 +312,15 @@ async function extendBooking(req, res, next) {
       }
 
       const booking = rows[0];
+
+      // Authorization Check: Must be the customer who booked, or the parking facility owner
+      const isCustomerOwner = req.user && booking.customer_id === req.user.id;
+      const isFacilityOwner = req.user && req.user.role === 'owner' && booking.owner_id === req.user.id;
+      if (!isCustomerOwner && !isFacilityOwner) {
+        const error = new Error('Access forbidden. You do not have permission to modify this booking.');
+        error.statusCode = 403;
+        throw error;
+      }
 
       if (booking.booking_status !== 'active') {
         const error = new Error(`Cannot extend a session that is ${booking.booking_status}.`);
@@ -351,6 +416,15 @@ async function cancelBooking(req, res, next) {
       }
 
       const booking = rows[0];
+
+      // Authorization Check: Must be the customer who booked, or the parking facility owner
+      const isCustomerOwner = req.user && booking.customer_id === req.user.id;
+      const isFacilityOwner = req.user && req.user.role === 'owner' && booking.owner_id === req.user.id;
+      if (!isCustomerOwner && !isFacilityOwner) {
+        const error = new Error('Access forbidden. You do not have permission to cancel this booking.');
+        error.statusCode = 403;
+        throw error;
+      }
 
       if (booking.booking_status !== 'active' && booking.booking_status !== 'confirmed') {
         const error = new Error(`Cannot cancel a booking that is ${booking.booking_status}.`);
@@ -484,6 +558,15 @@ async function getActiveCarLocation(req, res, next) {
     const { plate, ref } = req.query;
     const userId = req.user ? req.user.id : null;
 
+    // Unauthenticated callers without explicit reference or plate cannot access any active session
+    if (!ref && !plate && !userId) {
+      return res.json({
+        success: true,
+        hasActiveCar: false,
+        message: 'No active parking session found.'
+      });
+    }
+
     let query = `
       SELECT b.id, b.booking_ref, b.vehicle_number, b.driver_name, b.driver_phone,
              b.start_time, b.end_time, b.duration_hours, b.total_amount, b.booking_status,
@@ -610,9 +693,16 @@ async function getActiveCarLocation(req, res, next) {
  */
 async function getMyBookings(req, res, next) {
   try {
+    // Enforce server-side authentication
+    if (!req.user || !req.user.id) {
+      const error = new Error('Authentication required to view your booking history.');
+      error.statusCode = 401;
+      return next(error);
+    }
+
     await syncExpiredSessions();
 
-    const userId = req.user ? req.user.id : null;
+    const userId = req.user.id;
     const { status, search } = req.query;
 
     let query = `
@@ -637,13 +727,19 @@ async function getMyBookings(req, res, next) {
         l.area,
         l.latitude,
         l.longitude,
+        u.full_name AS owner_name,
+        u.upi_id AS owner_upi_id,
+        u.upi_name AS owner_upi_name,
         p.status AS payment_status,
         p.transaction_reference,
+        p.customer_utr,
+        p.confirmed_at,
         r.id AS review_id,
         r.rating AS review_rating
       FROM bookings b
       INNER JOIN parking_slots s ON b.parking_slot_id = s.id
       INNER JOIN parking_locations l ON b.parking_location_id = l.id
+      LEFT JOIN users u ON l.owner_id = u.id
       LEFT JOIN payments p ON b.id = p.booking_id
       LEFT JOIN reviews r ON b.id = r.booking_id
       WHERE 1=1
@@ -676,6 +772,9 @@ async function getMyBookings(req, res, next) {
     const bookings = rows.map(b => {
       const end = new Date(b.end_time).getTime();
       const remainingSeconds = Math.max(0, Math.floor((end - now) / 1000));
+      const ownerUpi = (b.owner_upi_id && b.owner_upi_id.trim()) || `owner${b.location_id || 1}@okhdfcbank`;
+      const ownerName = (b.owner_upi_name && b.owner_upi_name.trim()) || (b.owner_name && b.owner_name.trim()) || `${b.location_name} Parking`;
+      const upiUri = `upi://pay?pa=${encodeURIComponent(ownerUpi)}&pn=${encodeURIComponent(ownerName)}&am=${parseFloat(b.total_amount).toFixed(2)}&cu=INR&tn=${encodeURIComponent(b.booking_ref)}`;
 
       return {
         id: b.id,
@@ -698,8 +797,13 @@ async function getMyBookings(req, res, next) {
         totalAmount: parseFloat(b.total_amount),
         extensionCount: b.extension_count,
         status: b.booking_status,
-        paymentStatus: b.payment_status || 'paid',
+        paymentStatus: b.payment_status || 'pending',
         transactionRef: b.transaction_reference,
+        customerUtr: b.customer_utr,
+        confirmedAt: b.confirmed_at,
+        ownerUpiId: ownerUpi,
+        ownerUpiName: ownerName,
+        upiUri,
         hasReviewed: Boolean(b.review_id),
         rating: b.review_rating,
         createdAt: b.created_at
@@ -749,7 +853,10 @@ async function getOwnerBookings(req, res, next) {
         l.area,
         p.status AS payment_status,
         p.payment_method,
-        p.transaction_reference
+        p.transaction_reference,
+        p.customer_utr,
+        p.confirmed_by,
+        p.confirmed_at
       FROM bookings b
       INNER JOIN parking_slots s ON b.parking_slot_id = s.id
       INNER JOIN parking_locations l ON b.parking_location_id = l.id
@@ -803,9 +910,12 @@ async function getOwnerBookings(req, res, next) {
         hourlyRate: parseFloat(b.hourly_rate_applied),
         totalAmount: parseFloat(b.total_amount),
         bookingStatus: b.booking_status,
-        paymentStatus: b.payment_status || 'paid',
+        paymentStatus: b.payment_status || 'pending',
         paymentMethod: b.payment_method || 'upi',
         transactionRef: b.transaction_reference,
+        customerUtr: b.customer_utr,
+        confirmedBy: b.confirmed_by,
+        confirmedAt: b.confirmed_at,
         checkInTime: b.check_in_time,
         checkOutTime: b.check_out_time,
         createdAt: b.created_at
@@ -849,6 +959,8 @@ async function getBookingByIdOrRef(req, res, next) {
         b.cancellation_reason,
         b.extension_count,
         b.created_at,
+        b.qr_pass_status,
+        b.qr_validated_at,
         s.id AS slot_id,
         s.slot_no,
         s.slot_type,
@@ -862,12 +974,21 @@ async function getBookingByIdOrRef(req, res, next) {
         l.city,
         l.latitude,
         l.longitude,
+        l.owner_id,
+        u.full_name AS owner_name,
+        u.upi_id AS owner_upi_id,
+        u.upi_name AS owner_upi_name,
+        u.upi_description AS owner_upi_desc,
         p.status AS payment_status,
         p.payment_method,
-        p.transaction_reference
+        p.transaction_reference,
+        p.customer_utr,
+        p.confirmed_by,
+        p.confirmed_at
       FROM bookings b
       INNER JOIN parking_slots s ON b.parking_slot_id = s.id
       INNER JOIN parking_locations l ON b.parking_location_id = l.id
+      LEFT JOIN users u ON l.owner_id = u.id
       LEFT JOIN payments p ON b.id = p.booking_id
       WHERE ${isNumeric ? 'b.id = ?' : 'b.booking_ref = ?'}
     `;
@@ -881,9 +1002,22 @@ async function getBookingByIdOrRef(req, res, next) {
     }
 
     const b = rows[0];
+
+    // IDOR Protection: verify user is either the customer or the facility owner
+    const isCustomer = req.user && req.user.id === b.customer_id;
+    const isFacilityOwner = req.user && req.user.role === 'owner' && req.user.id === b.owner_id;
+    if (!isCustomer && !isFacilityOwner) {
+      const error = new Error('Access denied. You do not have permission to view this reservation.');
+      error.statusCode = 403;
+      return next(error);
+    }
     const now = new Date().getTime();
     const end = new Date(b.end_time).getTime();
     const remainingSeconds = Math.max(0, Math.floor((end - now) / 1000));
+
+    const ownerUpi = (b.owner_upi_id && b.owner_upi_id.trim()) || `owner${b.owner_id || 1}@okhdfcbank`;
+    const ownerName = (b.owner_upi_name && b.owner_upi_name.trim()) || (b.owner_name && b.owner_name.trim()) || `${b.location_name} Parking`;
+    const upiUri = `upi://pay?pa=${encodeURIComponent(ownerUpi)}&pn=${encodeURIComponent(ownerName)}&am=${parseFloat(b.total_amount).toFixed(2)}&cu=INR&tn=${encodeURIComponent(b.booking_ref)}`;
 
     res.json({
       success: true,
@@ -914,12 +1048,530 @@ async function getBookingByIdOrRef(req, res, next) {
         totalAmount: parseFloat(b.total_amount),
         extensionCount: b.extension_count,
         status: b.booking_status,
-        paymentStatus: b.payment_status || 'paid',
+        paymentStatus: b.payment_status || 'pending',
         paymentMethod: b.payment_method || 'upi',
         transactionRef: b.transaction_reference,
+        customerUtr: b.customer_utr,
+        confirmedBy: b.confirmed_by,
+        confirmedAt: b.confirmed_at,
+        ownerUpiId: ownerUpi,
+        ownerUpiName: ownerName,
+        ownerUpiDesc: b.owner_upi_desc,
+        upiUri,
+        payment: {
+          amount: parseFloat(b.total_amount),
+          status: b.payment_status || 'pending',
+          method: b.payment_method || 'upi',
+          transactionRef: b.transaction_reference,
+          customerUtr: b.customer_utr,
+          confirmedBy: b.confirmed_by,
+          confirmedAt: b.confirmed_at,
+          ownerUpiId: ownerUpi,
+          ownerUpiName: ownerName,
+          bookingRef: b.booking_ref,
+          upiUri
+        },
         createdAt: b.created_at,
         directions: `Drive to ${b.address}, ${b.area}. Follow Driveway to Row ${b.bay_row}, Bay ${b.slot_no}.`
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * PUT /api/bookings/:id/confirm-payment (Space Owner manually confirms verified UPI receipt)
+ */
+async function confirmPayment(req, res, next) {
+  try {
+    const bookingId = parseInt(req.params.id, 10);
+    const ownerId = req.user.id;
+
+    if (isNaN(bookingId)) {
+      const error = new Error('Invalid booking ID.');
+      error.statusCode = 400;
+      return next(error);
+    }
+
+    const [rows] = await pool.query(
+      `SELECT b.id, b.booking_ref, b.driver_name, b.customer_id, b.total_amount,
+              l.owner_id, l.name AS location_name,
+              p.id AS payment_id, p.status AS payment_status, p.customer_utr
+       FROM bookings b
+       INNER JOIN parking_locations l ON b.parking_location_id = l.id
+       LEFT JOIN payments p ON b.id = p.booking_id
+       WHERE b.id = ?`,
+      [bookingId]
+    );
+
+    if (rows.length === 0) {
+      const error = new Error(`Booking #${bookingId} not found.`);
+      error.statusCode = 404;
+      return next(error);
+    }
+
+    const booking = rows[0];
+
+    // Ownership Authorization Check: An owner can only confirm payments for their own locations
+    if (booking.owner_id !== ownerId) {
+      const error = new Error('Access denied. You can only confirm payments for your own parking facilities.');
+      error.statusCode = 403;
+      return next(error);
+    }
+
+    if (booking.payment_status === 'paid') {
+      return res.json({
+        success: true,
+        message: 'Payment is already confirmed as paid.',
+        paymentStatus: 'paid'
+      });
+    }
+
+    await pool.query(
+      `UPDATE payments 
+       SET status = 'paid', 
+           paid_at = UTC_TIMESTAMP(), 
+           confirmed_by = ?, 
+           confirmed_at = UTC_TIMESTAMP() 
+       WHERE booking_id = ?`,
+      [ownerId, bookingId]
+    );
+
+    // Notify customer that their UPI transfer has been confirmed
+    if (booking.customer_id) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, title, message, type) 
+         VALUES (?, 'Payment Confirmed ✓', ?, 'payment')`,
+        [
+          booking.customer_id,
+          `The parking owner has verified your UPI payment of ₹${parseFloat(booking.total_amount).toFixed(2)} for reservation ${booking.booking_ref}.`
+        ]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Payment for booking ${booking.booking_ref} confirmed successfully.`,
+      paymentStatus: 'paid',
+      confirmedBy: ownerId,
+      confirmedAt: new Date()
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/bookings/:id/submit-utr (Customer records their UPI transaction reference / UTR)
+ */
+async function submitCustomerUtr(req, res, next) {
+  try {
+    const bookingId = parseInt(req.params.id, 10);
+    const userId = req.user.id;
+    const { utr } = req.body;
+
+    if (isNaN(bookingId)) {
+      const error = new Error('Invalid booking ID.');
+      error.statusCode = 400;
+      return next(error);
+    }
+
+    if (!utr || typeof utr !== 'string' || !/^[a-zA-Z0-9_\-]{6,35}$/.test(utr.trim())) {
+      const error = new Error('Please provide a valid UPI Reference / UTR number (6-35 alphanumeric characters).');
+      error.statusCode = 400;
+      return next(error);
+    }
+
+    const cleanUtr = utr.trim().toUpperCase();
+
+    const [rows] = await pool.query(
+      `SELECT b.id, b.booking_ref, b.customer_id, l.owner_id, l.name AS location_name,
+              p.id AS payment_id, p.status AS payment_status
+       FROM bookings b
+       INNER JOIN parking_locations l ON b.parking_location_id = l.id
+       LEFT JOIN payments p ON b.id = p.booking_id
+       WHERE b.id = ?`,
+      [bookingId]
+    );
+
+    if (rows.length === 0) {
+      const error = new Error(`Booking #${bookingId} not found.`);
+      error.statusCode = 404;
+      return next(error);
+    }
+
+    const booking = rows[0];
+
+    // Authorization: User must be the customer of this booking or an owner
+    if (booking.customer_id !== userId && req.user.role !== 'owner') {
+      const error = new Error('Access denied. You can only submit payment details for your own booking.');
+      error.statusCode = 403;
+      return next(error);
+    }
+
+    await pool.query(
+      `UPDATE payments 
+       SET customer_utr = ? 
+       WHERE booking_id = ?`,
+      [cleanUtr, bookingId]
+    );
+
+    // Notify the space owner
+    if (booking.owner_id) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, title, message, type) 
+         VALUES (?, 'Customer Submitted Payment UTR', ?, 'payment')`,
+        [
+          booking.owner_id,
+          `Customer submitted UPI Reference ${cleanUtr} for booking ${booking.booking_ref}. Please verify in your bank app.`
+        ]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'UPI transaction reference submitted successfully. Space owner will verify.',
+      customerUtr: cleanUtr
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+
+/**
+ * GET /api/bookings/:idOrRef/qr-pass
+ * Returns the QR pass token for a customer's own booking
+ * The token is re-generated (a new one) each time — but validated against the stored hash
+ */
+async function getBookingQrPass(req, res, next) {
+  try {
+    const identifier = req.params.idOrRef;
+    const isNumeric = /^\d+$/.test(identifier);
+
+    if (!req.user || !req.user.id) {
+      const error = new Error('Authentication required.');
+      error.statusCode = 401;
+      return next(error);
+    }
+
+    const [rows] = await pool.query(
+      `SELECT b.id, b.booking_ref, b.customer_id, b.booking_status, b.qr_pass_token_hash, b.qr_pass_status,
+              b.vehicle_number, b.driver_name, b.start_time, b.end_time, b.duration_hours, b.total_amount,
+              s.slot_no, s.slot_type, l.id AS location_id, l.name AS location_name, l.address, l.area, l.owner_id
+       FROM bookings b
+       INNER JOIN parking_slots s ON b.parking_slot_id = s.id
+       INNER JOIN parking_locations l ON b.parking_location_id = l.id
+       WHERE ${isNumeric ? 'b.id = ?' : 'b.booking_ref = ?'}`,
+      [identifier]
+    );
+
+    if (rows.length === 0) {
+      const error = new Error('Booking not found.');
+      error.statusCode = 404;
+      return next(error);
+    }
+
+    const booking = rows[0];
+
+    // Authorization: only the booking customer or the facility owner can access QR pass
+    const isCustomer = req.user.id === booking.customer_id;
+    const isFacilityOwner = req.user.role === 'owner' && req.user.id === booking.owner_id;
+    if (!isCustomer && !isFacilityOwner) {
+      const error = new Error('Access denied. You can only view QR passes for your own bookings.');
+      error.statusCode = 403;
+      return next(error);
+    }
+
+    if (!booking.qr_pass_token_hash) {
+      const error = new Error('No QR pass has been generated for this booking.');
+      error.statusCode = 404;
+      return next(error);
+    }
+
+    // Generate a fresh token and update the stored hash
+    // This ensures single-access security — each retrieval issues a new token
+    const newToken = generateQrPassToken();
+    const newHash = hashQrToken(newToken);
+
+    await pool.query(
+      'UPDATE bookings SET qr_pass_token_hash = ? WHERE id = ?',
+      [newHash, booking.id]
+    );
+
+    // Build secure validation URL
+    const validationPayload = JSON.stringify({
+      token: newToken,
+      ref: booking.booking_ref,
+      bid: booking.id
+    });
+
+    res.json({
+      success: true,
+      data: {
+        bookingId: booking.id,
+        bookingRef: booking.booking_ref,
+        qrPayload: validationPayload,
+        qrPassStatus: booking.qr_pass_status,
+        bookingStatus: booking.booking_status,
+        vehicleNumber: booking.vehicle_number,
+        driverName: booking.driver_name,
+        slotNo: booking.slot_no,
+        slotType: booking.slot_type,
+        locationName: booking.location_name,
+        address: booking.address,
+        area: booking.area,
+        startTime: booking.start_time,
+        endTime: booking.end_time,
+        durationHours: booking.duration_hours,
+        totalAmount: parseFloat(booking.total_amount)
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/bookings/validate-pass
+ * Validates a QR pass token for parking entry (Owner/Staff only)
+ * Atomic validation to prevent duplicate scans
+ */
+async function validateQrPass(req, res, next) {
+  try {
+    if (!req.user || req.user.role !== 'owner') {
+      const error = new Error('Only authorized facility owners can validate parking passes.');
+      error.statusCode = 403;
+      return next(error);
+    }
+
+    let { token, ref, bookingRef, code, bid } = req.body;
+
+    // Handle scanned string that might be JSON string
+    if (token && typeof token === 'string' && token.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(token);
+        if (parsed.token) token = parsed.token;
+        if (parsed.ref && !ref) ref = parsed.ref;
+      } catch (e) {
+        // use token as-is
+      }
+    }
+
+    // Support generic code input from scanner / manual entry
+    if (!token && !ref && !bookingRef && code) {
+      if (typeof code === 'string' && code.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(code);
+          token = parsed.token;
+          ref = parsed.ref;
+        } catch (e) {
+          ref = code;
+        }
+      } else if (typeof code === 'string' && code.length > 30) {
+        token = code;
+      } else {
+        ref = code;
+      }
+    }
+
+    if (!token && !ref && !bookingRef) {
+      const error = new Error('QR pass token or booking reference is required.');
+      error.statusCode = 400;
+      return next(error);
+    }
+
+    const result = await withTransaction(async (connection) => {
+      let rows;
+      if (token) {
+        const tokenHash = hashQrToken(token);
+        [rows] = await connection.query(
+          `SELECT b.id, b.booking_ref, b.customer_id, b.booking_status, b.qr_pass_status,
+                  b.qr_pass_token_hash, b.vehicle_number, b.driver_name, b.driver_phone,
+                  b.start_time, b.end_time, b.duration_hours, b.total_amount,
+                  b.qr_validated_at,
+                  s.slot_no, s.slot_type,
+                  l.id AS location_id, l.name AS location_name, l.area, l.owner_id
+           FROM bookings b
+           INNER JOIN parking_slots s ON b.parking_slot_id = s.id
+           INNER JOIN parking_locations l ON b.parking_location_id = l.id
+           WHERE b.qr_pass_token_hash = ?
+           FOR UPDATE`,
+          [tokenHash]
+        );
+      } else {
+        const targetRef = (ref || bookingRef).trim().toUpperCase();
+        [rows] = await connection.query(
+          `SELECT b.id, b.booking_ref, b.customer_id, b.booking_status, b.qr_pass_status,
+                  b.qr_pass_token_hash, b.vehicle_number, b.driver_name, b.driver_phone,
+                  b.start_time, b.end_time, b.duration_hours, b.total_amount,
+                  b.qr_validated_at,
+                  s.slot_no, s.slot_type,
+                  l.id AS location_id, l.name AS location_name, l.area, l.owner_id
+           FROM bookings b
+           INNER JOIN parking_slots s ON b.parking_slot_id = s.id
+           INNER JOIN parking_locations l ON b.parking_location_id = l.id
+           WHERE b.booking_ref = ?
+           FOR UPDATE`,
+          [targetRef]
+        );
+      }
+
+      if (rows.length === 0) {
+        return {
+          valid: false,
+          reason: 'invalid',
+          message: 'Invalid QR pass code. No matching reservation found.'
+        };
+      }
+
+      const booking = rows[0];
+
+      // Verify this owner has authority over this facility
+      if (booking.owner_id !== req.user.id) {
+        return {
+          valid: false,
+          reason: 'wrong_facility',
+          message: 'This reservation belongs to a different parking facility. You are not authorized to validate it.'
+        };
+      }
+
+      // Check booking status
+      if (booking.booking_status === 'cancelled') {
+        return {
+          valid: false,
+          reason: 'cancelled',
+          message: `Reservation ${booking.booking_ref} has been cancelled.`,
+          bookingRef: booking.booking_ref
+        };
+      }
+
+      if (booking.booking_status === 'completed') {
+        return {
+          valid: false,
+          reason: 'completed',
+          message: `Reservation ${booking.booking_ref} is already completed.`,
+          bookingRef: booking.booking_ref
+        };
+      }
+
+      if (booking.booking_status === 'expired') {
+        return {
+          valid: false,
+          reason: 'expired',
+          message: `Reservation ${booking.booking_ref} has expired.`,
+          bookingRef: booking.booking_ref
+        };
+      }
+
+      // Check QR pass status
+      if (booking.qr_pass_status === 'used') {
+        return {
+          valid: false,
+          reason: 'already_used',
+          message: `QR pass for ${booking.booking_ref} has already been used for entry at ${new Date(booking.qr_validated_at).toLocaleString()}.`,
+          bookingRef: booking.booking_ref,
+          validatedAt: booking.qr_validated_at
+        };
+      }
+
+      if (booking.qr_pass_status === 'revoked') {
+        return {
+          valid: false,
+          reason: 'revoked',
+          message: `QR pass for ${booking.booking_ref} has been revoked.`,
+          bookingRef: booking.booking_ref
+        };
+      }
+
+      // Check time validity
+      const now = new Date();
+      const startTime = new Date(booking.start_time);
+      const endTime = new Date(booking.end_time);
+
+      // Allow entry up to 30 minutes before start time
+      const earlyEntryWindow = new Date(startTime.getTime() - 30 * 60 * 1000);
+
+      if (now < earlyEntryWindow) {
+        return {
+          valid: false,
+          reason: 'not_yet_valid',
+          message: `Reservation ${booking.booking_ref} is not yet valid. Entry opens at ${startTime.toLocaleTimeString()}.`,
+          bookingRef: booking.booking_ref,
+          validFrom: booking.start_time
+        };
+      }
+
+      // Allow entry up to 30 minutes after end time (grace period)
+      const graceEndTime = new Date(endTime.getTime() + 30 * 60 * 1000);
+      if (now > graceEndTime) {
+        // Mark as expired
+        await connection.query(
+          `UPDATE bookings SET qr_pass_status = 'expired', booking_status = 'expired', updated_at = NOW() WHERE id = ?`,
+          [booking.id]
+        );
+        return {
+          valid: false,
+          reason: 'expired',
+          message: `Reservation ${booking.booking_ref} has expired. Session ended at ${endTime.toLocaleTimeString()}.`,
+          bookingRef: booking.booking_ref
+        };
+      }
+
+      // ✅ VALID — Atomically mark as used
+      await connection.query(
+        `UPDATE bookings 
+         SET qr_pass_status = 'used', 
+             qr_validated_at = NOW(), 
+             qr_validated_by = ?,
+             check_in_time = COALESCE(check_in_time, NOW()),
+             updated_at = NOW() 
+         WHERE id = ?`,
+        [req.user.id, booking.id]
+      );
+
+      // Notify the customer
+      if (booking.customer_id) {
+        await connection.query(
+          `INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'booking')`,
+          [
+            booking.customer_id,
+            'Entry Validated ✓',
+            `Your parking pass for Bay ${booking.slot_no} at ${booking.location_name} has been validated. Welcome!`
+          ]
+        );
+      }
+
+      return {
+        valid: true,
+        reason: 'valid',
+        message: `✓ Valid reservation! ${booking.driver_name} — Bay ${booking.slot_no} at ${booking.location_name}.`,
+        bookingRef: booking.booking_ref,
+        booking: {
+          id: booking.id,
+          bookingRef: booking.booking_ref,
+          driverName: booking.driver_name,
+          driverPhone: booking.driver_phone,
+          vehicleNumber: booking.vehicle_number,
+          slotNo: booking.slot_no,
+          slotType: booking.slot_type,
+          locationName: booking.location_name,
+          area: booking.area,
+          startTime: booking.start_time,
+          endTime: booking.end_time,
+          durationHours: booking.duration_hours,
+          totalAmount: parseFloat(booking.total_amount),
+          validatedAt: new Date()
+        }
+      };
+    });
+
+    const statusCode = result.valid ? 200 : (result.reason === 'invalid' ? 404 : 400);
+
+    res.status(statusCode).json({
+      success: result.valid,
+      ...result
     });
   } catch (error) {
     next(error);
@@ -934,5 +1586,10 @@ module.exports = {
   getActiveCarLocation,
   getMyBookings,
   getOwnerBookings,
-  getBookingByIdOrRef
+  getBookingByIdOrRef,
+  getBookingQrPass,
+  validateQrPass,
+  confirmPayment,
+  submitCustomerUtr
 };
+

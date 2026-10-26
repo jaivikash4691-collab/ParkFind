@@ -1,0 +1,137 @@
+/* LatticeLoader.css - React Bits Animated Lattice Pattern Loader */
+
+.lattice-loader-root {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  border-radius: var(--radius-xl, 16px);
+  user-select: none;
+}
+
+/* Grid Matrix */
+.lattice-grid {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+  justify-items: center;
+}
+
+/* Size Variants */
+.lattice-sm .lattice-grid {
+  gap: 5px;
+}
+.lattice-sm .lattice-node {
+  width: 7px;
+  height: 7px;
+}
+
+.lattice-md .lattice-grid {
+  gap: 8px;
+}
+.lattice-md .lattice-node {
+  width: 10px;
+  height: 10px;
+}
+
+.lattice-lg .lattice-grid {
+  gap: 12px;
+}
+.lattice-lg .lattice-node {
+  width: 15px;
+  height: 15px;
+}
+
+/* Lattice Nodes */
+.lattice-node {
+  display: block;
+  transition: opacity 0.15s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease;
+  will-change: transform, opacity;
+}
+
+.lattice-node.node-round {
+  border-radius: 50%;
+}
+
+.lattice-node.node-square {
+  border-radius: 3px;
+}
+
+/* Metadata & Text */
+.lattice-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  text-align: center;
+}
+
+.lattice-message {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+  letter-spacing: -0.01em;
+}
+
+.lattice-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted, #94a3b8);
+  font-weight: 600;
+}
+
+.lattice-timer-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--lattice-color);
+  animation: latticePulse 1.2s ease-in-out infinite;
+}
+
+@keyframes latticePulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+}
+
+.lattice-status-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lattice-status-badge.badge-done {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.lattice-status-badge.badge-error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .lattice-node {
+    transition: none !important;
+    animation: none !important;
+  }
+  .lattice-timer-pulse {
+    animation: none !important;
+  }
+}

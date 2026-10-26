@@ -53,8 +53,11 @@ app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 // Legacy route alias for backwards compatibility
 app.use('/api/zones', require('./routes/locationRoutes'));
 
-// Static Frontend Serving
-app.use(express.static(path.join(__dirname, '../Frontend')));
+// Static Frontend Serving (Prefers modern Vite dist bundle if present)
+const fs = require('fs');
+const distPath = path.join(__dirname, '../Frontend/dist');
+const staticPath = fs.existsSync(distPath) ? distPath : path.join(__dirname, '../Frontend');
+app.use(express.static(staticPath));
 
 // 404 Handler for API routes
 app.use('/api', notFoundHandler);
@@ -62,7 +65,10 @@ app.use('/api', notFoundHandler);
 // Fallback to index.html for SPA routing
 app.use((req, res, next) => {
   if (req.method === 'GET' && !req.path.startsWith('/api')) {
-    return res.sendFile(path.join(__dirname, '../Frontend/index.html'));
+    const indexPath = fs.existsSync(path.join(distPath, 'index.html'))
+      ? path.join(distPath, 'index.html')
+      : path.join(__dirname, '../Frontend/index.html');
+    return res.sendFile(indexPath);
   }
   next();
 });

@@ -469,7 +469,7 @@ async function createLocation(req, res, next) {
           latitude, longitude, hourly_rate, total_capacity, status,
           opening_time, closing_time, is_covered, has_ev, has_cctv,
           has_security, is_24_7, is_accessible, image_url
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         ownerId,
         name.trim(),

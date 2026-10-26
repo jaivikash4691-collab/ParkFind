@@ -49,14 +49,14 @@ async function runSimulation() {
 
   // Step 2: Search Nearby Parking in Coimbatore with Geolocation
   console.log('\n[Step 2] Customer searches for nearby parking around RS Puram...');
-  const locRes = await request('/api/locations?user_lat=11.0084&user_lng=76.9482&sort_by=nearest');
+  const locRes = await request('/api/locations?user_lat=11.0084&user_lng=76.9482&sort_by=nearest', 'GET', null, custToken);
   const topMatch = locRes.body.data.find(l => l.name.includes('RS Puram')) || locRes.body.data[0];
   console.log(`  ✓ Target facility: ${topMatch.name} in ${topMatch.area} (${topMatch.distanceLabel || 'Coimbatore'})`);
   console.log(`    - Tariff: ₹${topMatch.hourlyRate}/hr | Available: ${topMatch.availableSlots}/${topMatch.totalCapacity} bays`);
 
   // Step 3: View Location Detail & Pick Slot
   console.log(`\n[Step 3] Customer views layout of ${topMatch.name}...`);
-  const locDetail = await request(`/api/locations/${topMatch.id}`);
+  const locDetail = await request(`/api/locations/${topMatch.id}`, 'GET', null, custToken);
   const availSlot = locDetail.body.data.slots.find(s => s.status === 'available');
   console.log(`  ✓ Selected Bay: ${availSlot.slot_no} (${availSlot.slot_type})`);
 
@@ -72,9 +72,11 @@ async function runSimulation() {
   }, custToken);
 
   const booking = bookingRes.body.data;
-  console.log(`  ✓ Booking Confirmed! Ref: ${booking.bookingRef}`);
-  console.log(`    - Payment Txn:  ${booking.transactionRef} (PAID ₹${booking.totalAmount})`);
-  console.log(`    - Direction:    ${booking.directions}`);
+  console.log(`  ✓ Booking Created! Ref: ${booking.bookingRef}`);
+  console.log(`    - Payment Status: ${booking.paymentStatus.toUpperCase()} (₹${booking.totalAmount})`);
+  console.log(`    - Recipient:      ${booking.ownerUpiName} (${booking.ownerUpiId})`);
+  console.log(`    - UPI URI:        ${booking.upiUri}`);
+  console.log(`    - Direction:      ${booking.directions}`);
 
   // Step 5: Find My Car Verification
   console.log('\n[Step 5] Customer opens "Find My Car"...');
@@ -82,8 +84,14 @@ async function runSimulation() {
   console.log(`  ✓ Car Located: Bay ${carLoc.body.data.slotNo} at ${carLoc.body.data.locationName}`);
   console.log(`    - Time Remaining: ${Math.floor(carLoc.body.data.remainingSeconds / 60)} minutes`);
 
-  // Step 6: Owner Login & Management
-  console.log('\n[Step 6] Parking Owner logs in to inspect incoming check-in...');
+  // Step 6: Customer Retrieves QR Pass
+  console.log('\n[Step 6] Customer generates & retrieves single-use encrypted QR pass...');
+  const qrPassRes = await request(`/api/bookings/${booking.bookingId}/qr-pass`, 'GET', null, custToken);
+  const qrData = JSON.parse(qrPassRes.body.data.qrPayload);
+  console.log(`  ✓ Digital QR Pass issued for ref ${qrPassRes.body.data.bookingRef} (status: ${qrPassRes.body.data.qrPassStatus})`);
+
+  // Step 7: Owner Login & Management
+  console.log('\n[Step 7] Parking Owner logs in to inspect incoming check-in & payment...');
   const ownerAuth = await request('/api/auth/login', 'POST', {
     email: 'owner1@parkfind.test',
     password: 'Demo@12345'
@@ -94,21 +102,37 @@ async function runSimulation() {
   const ownerBookings = await request('/api/bookings/owner-bookings', 'GET', null, ownerToken);
   const matched = ownerBookings.body.data.find(b => b.id === booking.bookingId);
   console.log(`  ✓ Owner verifies incoming booking for ${matched.customerName} (${matched.vehicleNumber})`);
-  console.log(`    - Slot: ${matched.slotNo} | Paid: ₹${matched.totalAmount} | Status: ${matched.bookingStatus}`);
+  console.log(`    - Slot: ${matched.slotNo} | Total: ₹${matched.totalAmount} | Payment: ${matched.paymentStatus}`);
 
-  // Step 7: Owner marks session completed
-  console.log('\n[Step 7] Owner marks booking completed at exit gate...');
+  // Step 7b: Owner Confirms UPI Payment
+  console.log('\n[Step 7b] Owner verifies credit in bank app and confirms payment...');
+  const payConfirm = await request(`/api/bookings/${booking.bookingId}/confirm-payment`, 'PUT', null, ownerToken);
+  console.log(`  ✓ Payment Confirmed: ${payConfirm.body.message}`);
+
+
+  // Step 8: Gate Barrier Scan Validation
+  console.log('\n[Step 8] Gate Scanner verifies customer QR pass...');
+  const valRes = await request('/api/bookings/validate-pass', 'POST', { token: qrData.token }, ownerToken);
+  console.log(`  ✓ Gate Validation: ${valRes.body.valid ? 'AUTHORIZED ✓' : 'REJECTED ✕'} — ${valRes.body.message}`);
+
+  // Replay protection check
+  const replayRes = await request('/api/bookings/validate-pass', 'POST', { token: qrData.token }, ownerToken);
+  console.log(`  ✓ Replay Protection Verified: Scan again returns status ${replayRes.status} (${replayRes.body.reason})`);
+
+  // Step 9: Owner marks session completed
+  console.log('\n[Step 9] Owner marks booking completed at exit gate...');
   const completeRes = await request(`/api/bookings/${booking.bookingId}/status`, 'PUT', { status: 'completed' }, ownerToken);
   console.log(`  ✓ ${completeRes.body.message}`);
 
-  // Step 8: Customer submits review
-  console.log('\n[Step 8] Customer leaves a 5-star rating & review...');
+  // Step 10: Customer submits review
+  console.log('\n[Step 10] Customer leaves a 5-star rating & review...');
   const reviewRes = await request('/api/reviews', 'POST', {
     booking_id: booking.bookingId,
     rating: 5,
-    comment: 'Super easy parking process and seamless wayfinding in Coimbatore!'
+    comment: 'Super easy parking process and seamless QR gate entry in Coimbatore!'
   }, custToken);
   console.log(`  ✓ Review submitted: 5 ★ ("${reviewRes.body.data.comment}")`);
+
 
   console.log('\n================================================================');
   console.log('✓ TWO-SIDED MARKETPLACE SIMULATION COMPLETED WITH 100% SUCCESS!');
