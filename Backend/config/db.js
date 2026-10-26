@@ -1,15 +1,27 @@
 const mysql = require('mysql2/promise');
 const dotenv = require('dotenv');
+const fs = require('fs');
+const path = require('path');
+
 
 dotenv.config();
 
 // Create connection pool for high concurrency and connection reuse
+
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || '127.0.0.1',
-  port: parseInt(process.env.DB_PORT || '3306', 10),
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT || '4000', 10),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME || 'ParkIt',
+
+  ssl: {
+    ca: fs.readFileSync(
+      path.join(__dirname, 'certs', 'ca.pem')
+    ),
+    rejectUnauthorized: true
+  },
+
   waitForConnections: true,
   connectionLimit: 15,
   queueLimit: 0,
@@ -17,7 +29,6 @@ const pool = mysql.createPool({
   keepAliveInitialDelay: 10000,
   timezone: '+00:00'
 });
-
 /**
  * Test the database connection and log status
  */
