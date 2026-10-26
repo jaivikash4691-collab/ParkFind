@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { bookingsApi } from '../api/bookings';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { EmptyState } from '../components/ui/EmptyState';
+import { QrScannerModal } from '../components/owner/QrScannerModal';
 import { useToast } from '../context/ToastContext';
 import {
   QrCode,
@@ -11,7 +12,9 @@ import {
   Phone,
   Car,
   Clock,
-  Calendar
+  Calendar,
+  ShieldCheck,
+  AlertCircle
 } from 'lucide-react';
 
 export function OwnerBookingsPage() {
@@ -21,6 +24,8 @@ export function OwnerBookingsPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [confirmingId, setConfirmingId] = useState(null);
 
   const fetchOwnerBookings = async () => {
     try {
@@ -38,6 +43,19 @@ export function OwnerBookingsPage() {
     fetchOwnerBookings();
   }, []);
 
+  const handleConfirmPayment = async (bookingId) => {
+    setConfirmingId(bookingId);
+    try {
+      await bookingsApi.confirmPayment(bookingId);
+      showToast(`Payment confirmed for reservation #${bookingId}!`, 'success');
+      fetchOwnerBookings();
+    } catch (err) {
+      showToast(err.message || 'Failed to confirm payment', 'danger');
+    } finally {
+      setConfirmingId(null);
+    }
+  };
+
   const handleUpdateStatus = async (bookingId, status) => {
     try {
       await bookingsApi.updateStatus(bookingId, status);
@@ -48,12 +66,14 @@ export function OwnerBookingsPage() {
     }
   };
 
+
   const filteredBookings = bookings.filter((b) => {
-    if (statusFilter !== 'all' && b.status !== statusFilter) return false;
+    const bStatus = b.bookingStatus || b.status || '';
+    if (statusFilter !== 'all' && bStatus !== statusFilter) return false;
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
       const matchRef = (b.bookingRef || b.booking_ref || '').toLowerCase().includes(q);
-      const matchDriver = (b.driverName || b.driver_name || '').toLowerCase().includes(q);
+      const matchDriver = (b.customerName || b.driverName || b.driver_name || '').toLowerCase().includes(q);
       const matchPlate = (b.vehicleNumber || b.vehicle_number || '').toLowerCase().includes(q);
       const matchLoc = (b.locationName || b.location_name || '').toLowerCase().includes(q);
       if (!matchRef && !matchDriver && !matchPlate && !matchLoc) return false;
@@ -77,9 +97,19 @@ export function OwnerBookingsPage() {
           </p>
         </div>
 
-        <button onClick={fetchOwnerBookings} className="btn btn-secondary btn-sm" style={{ gap: 6 }}>
-          <RefreshCw size={14} /> Refresh Logs
-        </button>
+        <div style={{ display: 'flex', gap: '0.65rem' }}>
+          <button
+            onClick={() => setScannerOpen(true)}
+            className="btn btn-primary btn-sm"
+            style={{ gap: 6 }}
+          >
+            <QrCode size={15} /> Scan Customer QR Pass
+          </button>
+
+          <button onClick={fetchOwnerBookings} className="btn btn-secondary btn-sm" style={{ gap: 6 }}>
+            <RefreshCw size={14} /> Refresh Logs
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Toolbar */}
@@ -131,13 +161,17 @@ export function OwnerBookingsPage() {
                   <th>Facility &amp; Bay</th>
                   <th>Reservation Time</th>
                   <th>Total Fee</th>
-                  <th>Status</th>
+                  <th>Payment Status</th>
+                  <th>Session Status</th>
                   <th>Gate Barrier Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredBookings.map((b) => {
-                  const isActive = b.status === 'active';
+                  const bStatus = b.bookingStatus || b.status || '';
+                  const isActive = bStatus === 'active';
+                  const isPaid = b.paymentStatus === 'paid' || b.payment_status === 'paid';
+
                   return (
                     <tr key={b.id}>
                       <td>
@@ -148,10 +182,10 @@ export function OwnerBookingsPage() {
 
                       <td>
                         <strong style={{ color: 'var(--text-primary)', display: 'block' }}>
-                          {b.driverName || b.driver_name}
+                          {b.customerName || b.driverName || b.driver_name}
                         </strong>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Phone size={11} /> {b.driverPhone || b.driver_phone}
+                          <Phone size={11} /> {b.customerPhone || b.driverPhone || b.driver_phone}
                         </span>
                       </td>
 
@@ -181,8 +215,44 @@ export function OwnerBookingsPage() {
                       </td>
 
                       <td>
-                        <span className={`badge ${isActive ? 'badge-success' : b.status === 'completed' ? 'badge-neutral' : 'badge-danger'}`}>
-                          {b.status.toUpperCase()}
+                        {isPaid ? (
+                          <div>
+                            <span className="badge badge-success font-mono" style={{ fontSize: '0.72rem' }}>
+                              PAID ✓
+                            </span>
+                            {b.confirmedAt && (
+                              <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: 2 }}>
+                                Verified
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            <span className="badge badge-warning font-mono" style={{ fontSize: '0.72rem' }}>
+                              PENDING
+                            </span>
+                            {b.customerUtr && (
+                              <div style={{ fontSize: '0.7rem', color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)', marginTop: 2 }} title="Customer UTR Reference">
+                                UTR: {b.customerUtr}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleConfirmPayment(b.id)}
+                              disabled={confirmingId === b.id}
+                              className="btn btn-success btn-xs"
+                              style={{ marginTop: 4, gap: 4, width: '100%', fontSize: '0.7rem' }}
+                              title="Verify that payment was credited to your UPI ID"
+                            >
+                              <ShieldCheck size={12} /> {confirmingId === b.id ? 'Saving...' : 'Confirm Paid'}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+
+                      <td>
+                        <span className={`badge ${isActive ? 'badge-success' : bStatus === 'completed' ? 'badge-neutral' : 'badge-danger'}`}>
+                          {bStatus.toUpperCase()}
                         </span>
                       </td>
 
@@ -207,6 +277,14 @@ export function OwnerBookingsPage() {
           </div>
         )}
       </div>
+
+
+      {/* QR Scanner Modal */}
+      <QrScannerModal
+        isOpen={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onValidationSuccess={() => fetchOwnerBookings()}
+      />
     </div>
   );
 }

@@ -154,11 +154,19 @@ async function login(req, res, next) {
 
 /**
  * GET /api/auth/me
+
+ * Retrieve authenticated user profile
  */
 async function getMe(req, res, next) {
   try {
+    if (!req.user || !req.user.id) {
+      const error = new Error('Authentication required.');
+      error.statusCode = 401;
+      return next(error);
+    }
+
     const [rows] = await pool.query(
-      'SELECT id, full_name, email, phone, role, created_at FROM users WHERE id = ?',
+      'SELECT id, full_name, email, phone, role, upi_id, upi_name, upi_description, created_at FROM users WHERE id = ?',
       [req.user.id]
     );
 
@@ -168,9 +176,121 @@ async function getMe(req, res, next) {
       return next(error);
     }
 
+    const user = rows[0];
+
     res.json({
       success: true,
-      data: rows[0]
+      data: {
+        id: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        upi_id: user.upi_id,
+        upi_name: user.upi_name,
+        upi_description: user.upi_description,
+        created_at: user.created_at
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /api/auth/owner-payment-settings
+ * Retrieve authenticated owner's UPI payment configuration
+ */
+
+async function getOwnerPaymentSettings(req, res, next) {
+  try {
+    if (!req.user || req.user.role !== 'owner') {
+      const error = new Error('Access denied. Space Owner role required.');
+      error.statusCode = 403;
+      return next(error);
+    }
+
+    const [rows] = await pool.query(
+      'SELECT id, full_name, email, upi_id, upi_name, upi_description FROM users WHERE id = ?',
+      [req.user.id]
+    );
+
+    if (rows.length === 0) {
+      const error = new Error('Owner account not found.');
+      error.statusCode = 404;
+      return next(error);
+    }
+
+    const user = rows[0];
+
+    res.json({
+      success: true,
+      data: {
+        ownerId: user.id,
+        email: user.email,
+        upi_id: user.upi_id || '',
+        upiId: user.upi_id || '',
+        upi_name: user.upi_name || user.full_name || '',
+        upiName: user.upi_name || user.full_name || '',
+        upi_description: user.upi_description || 'Parking reservation fee payment via Parkit',
+        upiDescription: user.upi_description || 'Parking reservation fee payment via Parkit',
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * PUT /api/auth/owner-payment-settings
+ * Update authenticated owner's UPI ID, display name, and payment description
+ */
+async function updateOwnerPaymentSettings(req, res, next) {
+  try {
+    if (!req.user || req.user.role !== 'owner') {
+      const error = new Error('Access denied. Space Owner role required.');
+      error.statusCode = 403;
+      return next(error);
+    }
+
+    const { upi_id, upi_name, upi_description } = req.body;
+
+    if (!upi_id || typeof upi_id !== 'string') {
+      const error = new Error('A valid UPI ID is required (e.g., yourname@okhdfcbank or business@upi).');
+      error.statusCode = 400;
+      return next(error);
+    }
+
+    const cleanedUpiId = upi_id.trim().toLowerCase();
+
+    // Standard NPCI / Indian UPI ID format regex: username@bankhandle
+    const upiRegex = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/;
+    if (!upiRegex.test(cleanedUpiId)) {
+      const error = new Error('Invalid UPI ID format. Must be in the format: username@bank (e.g. name@okhdfcbank or 9842210101@upi).');
+      error.statusCode = 400;
+      return next(error);
+    }
+
+    const cleanedName = upi_name ? upi_name.trim() : (req.user.full_name || 'Space Owner');
+    const cleanedDesc = upi_description ? upi_description.trim() : 'Parking reservation fee payment via Parkit';
+
+    await pool.query(
+      'UPDATE users SET upi_id = ?, upi_name = ?, upi_description = ?, updated_at = NOW() WHERE id = ?',
+      [cleanedUpiId, cleanedName, cleanedDesc, req.user.id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Owner UPI payment settings updated successfully.',
+      data: {
+        ownerId: req.user.id,
+        upi_id: cleanedUpiId,
+        upiId: cleanedUpiId,
+        upi_name: cleanedName,
+        upiName: cleanedName,
+        upi_description: cleanedDesc,
+        upiDescription: cleanedDesc
+      }
     });
   } catch (error) {
     next(error);
@@ -180,5 +300,8 @@ async function getMe(req, res, next) {
 module.exports = {
   register,
   login,
-  getMe
+  getMe,
+  getOwnerPaymentSettings,
+  updateOwnerPaymentSettings
 };
+

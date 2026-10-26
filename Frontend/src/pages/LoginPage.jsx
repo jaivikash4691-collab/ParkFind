@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { BorderGlow } from '../components/animation/BorderGlow';
-import { GlareHover } from '../components/animation/GlareHover';
 import {
   Car,
   Building2,
@@ -15,7 +13,8 @@ import {
   EyeOff,
   ArrowLeft,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  Sparkles
 } from 'lucide-react';
 
 export function LoginPage() {
@@ -56,6 +55,10 @@ export function LoginPage() {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  const handleRoleSelect = (newRole) => {
+    setRole(newRole);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -84,7 +87,7 @@ export function LoginPage() {
           role,
         });
 
-        showToast('Signed in successfully.', 'success');
+        showToast(`Signed in successfully as ${role === 'owner' ? 'Space Owner' : 'Driver'}.`, 'success');
       }
 
       // Successful auth - redirect to intended destination
@@ -94,24 +97,62 @@ export function LoginPage() {
         navigate(role === 'owner' ? '/owner' : '/', { replace: true });
       }
     } catch (err) {
-      showToast(err.message || 'Authentication failed', 'danger');
+      showToast(err.message || 'Authentication failed. Please check your credentials.', 'danger');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const fillDemoCredentials = (targetRole) => {
+    if (targetRole === 'owner') {
+      setRole('owner');
+      setFormData({
+        fullName: 'Muruganathan S',
+        email: 'owner1@parkfind.test',
+        phone: '+91 98422 10001',
+        password: 'Demo@12345',
+      });
+      showToast('Loaded Space Owner demo credentials', 'info', 1500);
+    } else {
+      setRole('customer');
+      setFormData({
+        fullName: 'Raveendran K',
+        email: 'demo.customer@parkfind.test',
+        phone: '+91 98422 10101',
+        password: 'Demo@12345',
+      });
+      showToast('Loaded Driver demo credentials', 'info', 1500);
+    }
+  };
+
   return (
     <div
-      className="app-container"
       style={{
-        minHeight: 'calc(100vh - 180px)',
+        minHeight: 'calc(100vh - var(--header-height, 72px) - 80px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '2rem 1rem',
+        padding: '2.5rem 1rem',
+        position: 'relative',
       }}
     >
-      <div style={{ width: '100%', maxWidth: '460px' }}>
+      {/* Background Decorative Ambient Radial Glow */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '20%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '600px',
+          height: '400px',
+          background: 'radial-gradient(circle, rgba(14, 165, 233, 0.12) 0%, rgba(2, 132, 199, 0.04) 50%, transparent 70%)',
+          pointerEvents: 'none',
+          zIndex: 0,
+        }}
+        aria-hidden="true"
+      />
+
+      <div style={{ width: '100%', maxWidth: '480px', position: 'relative', zIndex: 1 }}>
         {/* Back Link */}
         <div style={{ marginBottom: '1.25rem' }}>
           <button
@@ -130,285 +171,310 @@ export function LoginPage() {
             className="badge badge-primary"
             style={{
               width: '100%',
-              padding: '0.65rem 1rem',
-              marginBottom: '1rem',
+              padding: '0.75rem 1rem',
+              marginBottom: '1.25rem',
               justifyContent: 'flex-start',
               gap: 8,
-              fontSize: '0.8125rem',
+              fontSize: '0.85rem',
+              borderRadius: 'var(--radius-md)',
             }}
           >
             <ShieldCheck size={16} style={{ flexShrink: 0 }} />
-            <span>Please sign in to reserve your parking spot.</span>
+            <span>Please sign in to reserve your guaranteed parking spot.</span>
           </div>
         )}
 
-        <BorderGlow
-          animated={true}
-          borderRadius="18px"
-          glowColor="var(--accent-primary, #00d2ff)"
-          gradientColors={['#00d2ff', '#3b82f6', '#10b981']}
-          glowIntensity={0.85}
-          backgroundColor="var(--bg-surface)"
+        {/* Auth Card Container with Dark Navy Card & Cyan Glow */}
+        <div
+          className="card"
+          style={{
+            padding: '2.25rem 2rem',
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--border-medium)',
+            borderRadius: 'var(--radius-xl)',
+            boxShadow: 'var(--shadow-lg), 0 0 30px rgba(14, 165, 233, 0.08)',
+          }}
         >
-          <div
-            className="card"
-            style={{
-              padding: '2rem',
-              border: 'none',
-              backgroundColor: 'transparent',
-            }}
-          >
-            {/* Header */}
-            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div
-                className="brand-icon-box"
-                style={{
-                  width: 48,
-                  height: 48,
-                  fontSize: '1.5rem',
-                  margin: '0 auto 1rem auto',
-                }}
-              >
-                <span>P</span>
-              </div>
-              <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>
-                {isRegister ? `Create ${role === 'owner' ? 'Owner' : 'Driver'} Account` : 'Sign In to Parkit'}
-              </h2>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                {isRegister
-                  ? 'Reserve bays instantly or list commercial parking spaces'
-                  : 'Enter your credentials to access your parking workspace'}
-              </p>
-            </div>
-
-            {/* Role Switcher Tabs */}
+          {/* Header */}
+          <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
             <div
+              className="brand-icon-box"
               style={{
-                display: 'flex',
-                padding: 4,
-                borderRadius: 'var(--radius-lg)',
-                backgroundColor: 'var(--bg-subtle)',
-                marginBottom: '1.5rem',
-                gap: 4,
+                width: 52,
+                height: 52,
+                fontSize: '1.6rem',
+                margin: '0 auto 1rem auto',
+                background: 'linear-gradient(135deg, #0ea5e9, #0284c7)',
+                color: '#ffffff',
+                boxShadow: '0 4px 16px rgba(14, 165, 233, 0.35)',
               }}
             >
-              <button
-                type="button"
-                onClick={() => setRole('customer')}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  padding: '0.55rem',
-                  borderRadius: 'var(--radius-md)',
-                  border: 'none',
-                  backgroundColor: role === 'customer' ? 'var(--bg-surface)' : 'transparent',
-                  color: role === 'customer' ? 'var(--text-primary)' : 'var(--text-muted)',
-                  fontWeight: role === 'customer' ? 800 : 500,
-                  fontSize: '0.825rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow: role === 'customer' ? 'var(--shadow-sm)' : 'none',
-                }}
-              >
-                <Car size={16} /> Driver
-              </button>
+              <span>P</span>
+            </div>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)', marginBottom: 6, letterSpacing: '-0.02em' }}>
+              {isRegister ? `Create ${role === 'owner' ? 'Owner' : 'Driver'} Account` : 'Sign In to Parkit'}
+            </h1>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+              {isRegister
+                ? 'Reserve guaranteed parking bays or list parking spaces'
+                : 'Enter your credentials to access your parking workspace'}
+            </p>
+          </div>
 
+          {/* Role Switcher Tabs (Distinct glowing color for each role) */}
+          <div
+            style={{
+              display: 'flex',
+              padding: 5,
+              borderRadius: 'var(--radius-lg)',
+              backgroundColor: 'var(--bg-subtle)',
+              border: '1px solid var(--border-subtle)',
+              marginBottom: '1.5rem',
+              gap: 6,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => handleRoleSelect('customer')}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: '0.65rem 0.85rem',
+                borderRadius: 'var(--radius-md)',
+                border: role === 'customer' ? '1px solid rgba(14, 165, 233, 0.4)' : '1px solid transparent',
+                backgroundColor: role === 'customer' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
+                color: role === 'customer' ? '#38bdf8' : 'var(--text-muted)',
+                fontWeight: role === 'customer' ? 800 : 600,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: role === 'customer' ? '0 2px 8px rgba(14, 165, 233, 0.2)' : 'none',
+              }}
+            >
+              <Car size={16} /> Driver
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleRoleSelect('owner')}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: '0.65rem 0.85rem',
+                borderRadius: 'var(--radius-md)',
+                border: role === 'owner' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent',
+                backgroundColor: role === 'owner' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                color: role === 'owner' ? '#34d399' : 'var(--text-muted)',
+                fontWeight: role === 'owner' ? 800 : 600,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: role === 'owner' ? '0 2px 8px rgba(16, 185, 129, 0.2)' : 'none',
+              }}
+            >
+              <Building2 size={16} /> Space Owner
+            </button>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+            {isRegister && (
+              <>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.825rem', fontWeight: 700 }}>
+                    Full Name
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <User
+                      size={17}
+                      style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }}
+                    />
+                    <input
+                      type="text"
+                      name="fullName"
+                      value={formData.fullName}
+                      onChange={handleChange}
+                      placeholder="e.g. Raveendran Kumar"
+                      className="form-control"
+                      style={{ paddingLeft: 42, height: 46 }}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.825rem', fontWeight: 700 }}>
+                    Mobile Phone
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Phone
+                      size={17}
+                      style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }}
+                    />
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      placeholder="+91 98422 10101"
+                      className="form-control"
+                      style={{ paddingLeft: 42, height: 46 }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label" style={{ fontSize: '0.825rem', fontWeight: 700 }}>
+                Email Address
+              </label>
+              <div style={{ position: 'relative' }}>
+                <Mail
+                  size={17}
+                  style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }}
+                />
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="name@example.com"
+                  className="form-control"
+                  style={{ paddingLeft: 42, height: 46 }}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label" style={{ fontSize: '0.825rem', fontWeight: 700 }}>
+                Password
+              </label>
+              <div style={{ position: 'relative' }}>
+                <Lock
+                  size={17}
+                  style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }}
+                />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  className="form-control"
+                  style={{ paddingLeft: 42, paddingRight: 44, height: 46 }}
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: 12,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    padding: 6,
+                    cursor: 'pointer',
+                    color: 'var(--text-dim)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              className="btn btn-primary btn-lg"
+              disabled={submitting}
+              style={{
+                width: '100%',
+                height: 48,
+                fontWeight: 800,
+                fontSize: '0.95rem',
+                marginTop: '0.5rem',
+                gap: 8,
+                boxShadow: '0 4px 16px rgba(14, 165, 233, 0.3)',
+              }}
+            >
+              {submitting
+                ? 'Authenticating...'
+                : isRegister
+                ? `Create ${role === 'owner' ? 'Owner' : 'Driver'} Account →`
+                : `Sign In as ${role === 'owner' ? 'Space Owner' : 'Driver'} →`}
+            </button>
+
+            {/* Toggle Register / Login */}
+            <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
               <button
                 type="button"
-                onClick={() => setRole('owner')}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  padding: '0.55rem',
-                  borderRadius: 'var(--radius-md)',
-                  border: 'none',
-                  backgroundColor: role === 'owner' ? 'var(--bg-surface)' : 'transparent',
-                  color: role === 'owner' ? 'var(--text-primary)' : 'var(--text-muted)',
-                  fontWeight: role === 'owner' ? 800 : 500,
-                  fontSize: '0.825rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow: role === 'owner' ? 'var(--shadow-sm)' : 'none',
-                }}
+                onClick={() => setIsRegister(!isRegister)}
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-primary)' }}
               >
-                <Building2 size={16} /> Space Owner
+                {isRegister ? 'Already have an account? Sign In' : "Don't have an account? Create one"}
               </button>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {isRegister && (
-                <>
-                  <div>
-                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
-                      Full Name
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <User
-                        size={16}
-                        style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }}
-                      />
-                      <input
-                        type="text"
-                        name="fullName"
-                        value={formData.fullName}
-                        onChange={handleChange}
-                        placeholder="e.g. Ramesh Kumar"
-                        className="form-control"
-                        style={{ paddingLeft: 38 }}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
-                      Mobile Phone
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <Phone
-                        size={16}
-                        style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }}
-                      />
-                      <input
-                        type="tel"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        placeholder="+91 98422 12345"
-                        className="form-control"
-                        style={{ paddingLeft: 38 }}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div>
-                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
-                  Email Address
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <Mail
-                    size={16}
-                    style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }}
-                  />
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="name@example.com"
-                    className="form-control"
-                    style={{ paddingLeft: 38 }}
-                    required
-                  />
+            {/* 1-Click Demo Credentials Helper */}
+            {!isRegister && (
+              <div
+                style={{
+                  marginTop: '0.5rem',
+                  padding: '0.85rem 1rem',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-subtle)',
+                  fontSize: '0.78rem',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontWeight: 800, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Sparkles size={13} style={{ color: 'var(--accent-primary)' }} /> Quick Demo Autofill:
+                  </span>
                 </div>
-              </div>
 
-              <div>
-                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
-                  Password
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <Lock
-                    size={16}
-                    style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }}
-                  />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="••••••••"
-                    className="form-control"
-                    style={{ paddingLeft: 38, paddingRight: 38 }}
-                    required
-                    minLength={6}
-                  />
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    style={{
-                      position: 'absolute',
-                      right: 12,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: 'var(--text-dim)',
-                    }}
+                    onClick={() => fillDemoCredentials('customer')}
+                    className="btn btn-secondary btn-xs"
+                    style={{ flex: 1, gap: 4, fontSize: '0.75rem' }}
                   >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    <Car size={13} /> Driver Demo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fillDemoCredentials('owner')}
+                    className="btn btn-secondary btn-xs"
+                    style={{ flex: 1, gap: 4, fontSize: '0.75rem' }}
+                  >
+                    <Building2 size={13} /> Owner Demo
                   </button>
                 </div>
               </div>
-
-              {/* Submit Button */}
-              <GlareHover borderRadius="var(--radius-md)" glareColor="rgba(255,255,255,0.4)" glareOpacity={0.45}>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={submitting}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    fontWeight: 800,
-                    fontSize: '0.9rem',
-                    marginTop: '0.5rem',
-                  }}
-                >
-                  {submitting
-                    ? 'Authenticating...'
-                    : isRegister
-                    ? `Create ${role === 'owner' ? 'Owner' : 'Driver'} Account`
-                    : `Sign In as ${role === 'owner' ? 'Owner' : 'Driver'}`}
-                </button>
-              </GlareHover>
-
-              {/* Toggle Register / Login */}
-              <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsRegister(!isRegister)}
-                  className="btn btn-ghost btn-sm"
-                  style={{ fontSize: '0.8125rem', color: 'var(--accent-primary)' }}
-                >
-                  {isRegister ? 'Already have an account? Sign In' : "Don't have an account? Create one"}
-                </button>
-              </div>
-
-              {/* Demo Credentials Helper */}
-              {!isRegister && (
-                <div
-                  style={{
-                    marginTop: '0.5rem',
-                    padding: '0.75rem',
-                    borderRadius: 'var(--radius-md)',
-                    backgroundColor: 'rgba(0, 210, 255, 0.05)',
-                    border: '1px dashed var(--border-medium)',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-dim)',
-                  }}
-                >
-                  <div style={{ fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 2 }}>
-                    Demo Credentials:
-                  </div>
-                  <div>Customer: <code style={{ color: 'var(--accent-primary)' }}>demo.customer@parkfind.test</code> / <code style={{ color: 'var(--accent-primary)' }}>Demo@12345</code></div>
-                  <div>Owner: <code style={{ color: 'var(--accent-primary)' }}>owner1@parkfind.test</code> / <code style={{ color: 'var(--accent-primary)' }}>Demo@12345</code></div>
-                </div>
-              )}
-            </form>
-          </div>
-        </BorderGlow>
+            )}
+          </form>
+        </div>
       </div>
     </div>
   );
 }
+

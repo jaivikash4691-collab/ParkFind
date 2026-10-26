@@ -21,6 +21,7 @@ import { OwnerDashboardPage } from './pages/OwnerDashboardPage';
 import { OwnerSpacesPage } from './pages/OwnerSpacesPage';
 import { OwnerBookingsPage } from './pages/OwnerBookingsPage';
 import { OwnerEarningsPage } from './pages/OwnerEarningsPage';
+import { QrScannerPage } from './pages/QrScannerPage';
 
 // Protected Route Guard for Owner Operations
 function OwnerRoute({ children }) {
@@ -141,6 +142,14 @@ export function AppContent() {
             }
           />
           <Route
+            path="/owner/booking"
+            element={
+              <OwnerRoute>
+                <OwnerBookingsPage />
+              </OwnerRoute>
+            }
+          />
+          <Route
             path="/owner/earnings"
             element={
               <OwnerRoute>
@@ -151,6 +160,7 @@ export function AppContent() {
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
+
         </Routes>
       </main>
 

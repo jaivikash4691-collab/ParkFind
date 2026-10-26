@@ -43,4 +43,26 @@ export const bookingsApi = {
       method: 'PUT',
       body: JSON.stringify({ status }),
     }),
+
+  getQrPass: (idOrRef) =>
+    apiRequest(`/bookings/${idOrRef}/qr-pass`),
+
+  validatePass: (data) =>
+    apiRequest('/bookings/validate-pass', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  confirmPayment: (id) =>
+    apiRequest(`/bookings/${id}/confirm-payment`, {
+      method: 'PUT',
+    }),
+
+  submitUtr: (id, utr) =>
+    apiRequest(`/bookings/${id}/submit-utr`, {
+      method: 'POST',
+      body: JSON.stringify({ utr }),
+    }),
 };
+
+

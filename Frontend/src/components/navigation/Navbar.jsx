@@ -16,6 +16,7 @@ import {
   LayoutDashboard,
   Coins,
   QrCode,
+  Camera,
   Sun,
   Moon,
   LogOut,
@@ -88,9 +89,9 @@ export function Navbar() {
   // Owner navigation routes (Authenticated)
   const ownerLinks = [
     { to: '/owner', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/owner/spaces', label: 'My Parking Spaces', icon: Building2 },
-    { to: '/owner/bookings', label: 'Gate Check-In', icon: QrCode },
-    { to: '/owner/earnings', label: 'Earnings & Financials', icon: Coins },
+    { to: '/owner/spaces', label: 'My Spaces', icon: Building2 },
+    { to: '/owner/bookings', label: 'Bookings & Gate', icon: QrCode },
+    { to: '/owner/earnings', label: 'Earnings & UPI', icon: Coins },
   ];
 
   const currentLinks = isOwner ? ownerLinks : customerLinks;
@@ -112,8 +113,8 @@ export function Navbar() {
   const ownerBubbleItems = [
     { label: 'Dashboard', href: '/owner', icon: <LayoutDashboard size={16} /> },
     { label: 'Parking Spaces', href: '/owner/spaces', icon: <Building2 size={16} /> },
-    { label: 'Gate Check-In', href: '/owner/bookings', icon: <QrCode size={16} /> },
-    { label: 'Earnings & Financials', href: '/owner/earnings', icon: <Coins size={16} /> },
+    { label: 'Bookings & Gate', href: '/owner/bookings', icon: <QrCode size={16} /> },
+    { label: 'Earnings & UPI', href: '/owner/earnings', icon: <Coins size={16} /> },
     {
       label: `Profile (${user?.full_name?.split(' ')[0] || 'Owner'})`,
       href: '/owner',

@@ -178,10 +178,16 @@ export function BookingPage() {
   };
 
   const handlePaymentSuccess = (result) => {
-    setPaymentModalOpen(false);
     setBookingResult(result);
-    setPassModalOpen(true);
   };
+
+  const handleClosePaymentModal = () => {
+    setPaymentModalOpen(false);
+    if (bookingResult) {
+      navigate('/bookings');
+    }
+  };
+
 
   return (
     <div className="app-container">
@@ -422,10 +428,10 @@ export function BookingPage() {
         </div>
       </div>
 
-      {/* Payment Checkout Modal */}
+      {/* Payment Checkout Modal with Owner UPI QR */}
       <PaymentModal
         isOpen={paymentModalOpen}
-        onClose={() => setPaymentModalOpen(false)}
+        onClose={handleClosePaymentModal}
         location={location}
         slot={selectedSlot}
         duration={duration}
@@ -434,6 +440,7 @@ export function BookingPage() {
         driverPhone={driverPhone}
         onPaymentSuccess={handlePaymentSuccess}
       />
+
 
       {/* Digital Access Pass Modal */}
       <DigitalPassModal

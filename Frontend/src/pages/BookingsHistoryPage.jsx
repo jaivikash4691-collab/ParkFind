@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { bookingsApi } from '../api/bookings';
 import { reviewsApi } from '../api/reviews';
 import { Modal } from '../components/ui/Modal';
+import { DigitalPassModal } from '../components/booking/DigitalPassModal';
+import { PaymentModal } from '../components/booking/PaymentModal';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useActiveSession } from '../context/ActiveSessionContext';
@@ -15,7 +17,9 @@ import {
   Plus,
   Clock,
   CheckCircle2,
-  Calendar
+  Calendar,
+  QrCode,
+  AlertCircle
 } from 'lucide-react';
 
 export function BookingsHistoryPage() {
@@ -27,12 +31,16 @@ export function BookingsHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [filterTab, setFilterTab] = useState('all');
 
-  // Review Modal State
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [activeReviewBooking, setActiveReviewBooking] = useState(null);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
+
+  // Digital QR Pass & Payment QR Modal States
+  const [selectedPassBooking, setSelectedPassBooking] = useState(null);
+  const [selectedPaymentBooking, setSelectedPaymentBooking] = useState(null);
+
 
   const fetchBookings = async () => {
     try {
@@ -154,14 +162,18 @@ export function BookingsHistoryPage() {
                 }}
               >
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: 4, flexWrap: 'wrap' }}>
                     <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                       {b.locationName || b.location_name}
                     </h3>
                     <span className={`badge ${isActive ? 'badge-success' : isCompleted ? 'badge-neutral' : 'badge-danger'}`}>
                       {b.status.toUpperCase()}
                     </span>
+                    <span className={`badge ${(b.paymentStatus === 'paid' || b.payment_status === 'paid') ? 'badge-success' : 'badge-warning'}`}>
+                      {(b.paymentStatus === 'paid' || b.payment_status === 'paid') ? 'PAID ✓' : 'UPI PENDING'}
+                    </span>
                   </div>
+
 
                   <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
                     <span>
@@ -203,7 +215,28 @@ export function BookingsHistoryPage() {
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {(b.paymentStatus === 'pending' || b.payment_status === 'pending') && (
+                      <button
+                        onClick={() => setSelectedPaymentBooking(b)}
+                        className="btn btn-warning btn-sm"
+                        style={{ gap: 4, fontWeight: 700 }}
+                        title="Display Owner UPI Payment QR"
+                      >
+                        <QrCode size={14} /> Pay QR
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => setSelectedPassBooking(b)}
+                      className="btn btn-secondary btn-sm"
+                      style={{ gap: 4 }}
+                      title="View Digital QR Pass"
+                    >
+                      <QrCode size={14} /> Pass
+                    </button>
+
+
                     {isActive ? (
                       <>
                         <button
@@ -301,6 +334,24 @@ export function BookingsHistoryPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Digital QR Access Pass Modal */}
+      <DigitalPassModal
+        isOpen={!!selectedPassBooking}
+        onClose={() => setSelectedPassBooking(null)}
+        bookingResult={selectedPassBooking}
+      />
+
+      {/* Owner UPI Payment QR Modal */}
+      <PaymentModal
+        isOpen={!!selectedPaymentBooking}
+        onClose={() => {
+          setSelectedPaymentBooking(null);
+          fetchBookings();
+        }}
+        existingBooking={selectedPaymentBooking}
+      />
     </div>
   );
 }
+

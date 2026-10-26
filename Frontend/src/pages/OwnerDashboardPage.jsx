@@ -7,7 +7,9 @@ import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { LatticeLoader } from '../components/animation/LatticeLoader';
 import { BorderGlow } from '../components/animation/BorderGlow';
 import { GlareHover } from '../components/animation/GlareHover';
+import { OwnerPaymentSettings } from '../components/owner/OwnerPaymentSettings';
 import { useAuth } from '../context/AuthContext';
+
 import { useToast } from '../context/ToastContext';
 import {
   Coins,
@@ -40,7 +42,17 @@ export function OwnerDashboardPage() {
       ]);
 
       if (statsRes && statsRes.ownerStats) {
-        setStats(statsRes.ownerStats);
+        setStats({
+          ...statsRes.ownerStats,
+          overallOccupancyPct: statsRes.ownerStats.occupancyPercentage ?? statsRes.ownerStats.overallOccupancyPct ?? statsRes.occupancyPercentage ?? 0,
+          totalBookings: statsRes.ownerStats.totalBookings ?? statsRes.totalBookings ?? 0,
+        });
+      } else if (statsRes) {
+        setStats({
+          ...statsRes,
+          overallOccupancyPct: statsRes.occupancyPercentage ?? 0,
+          totalBookings: statsRes.totalBookings ?? 0,
+        });
       }
       setRecentBookings(bookingsRes || []);
     } catch (err) {
@@ -196,8 +208,15 @@ export function OwnerDashboardPage() {
             </GlareHover>
           </div>
 
+          {/* Direct UPI Payment Settings */}
+          <div style={{ marginBottom: '2rem' }}>
+            <OwnerPaymentSettings onSettingsUpdated={() => fetchDashboardData()} />
+          </div>
+
           {/* Incoming Customer Bookings Table */}
           <div className="card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
+
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <div>
                 <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
@@ -240,7 +259,8 @@ export function OwnerDashboardPage() {
                     </tr>
                   ) : (
                     recentBookings.slice(0, 8).map((b) => {
-                      const isActive = b.status === 'active';
+                      const bStatus = b.bookingStatus || b.status || b.booking_status || '';
+                      const isActive = bStatus === 'active';
                       return (
                         <tr key={b.id}>
                           <td>
@@ -274,7 +294,7 @@ export function OwnerDashboardPage() {
 
                           <td>
                             <span className={`badge ${isActive ? 'badge-success' : 'badge-neutral'}`}>
-                              {b.status.toUpperCase()}
+                              {bStatus.toUpperCase()}
                             </span>
                           </td>
 

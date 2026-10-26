@@ -17,4 +17,16 @@ export const authApi = {
     apiRequest('/auth/me', {
       method: 'GET',
     }),
+
+  getOwnerPaymentSettings: () =>
+    apiRequest('/auth/owner-payment-settings', {
+      method: 'GET',
+    }),
+
+  updateOwnerPaymentSettings: (data) =>
+    apiRequest('/auth/owner-payment-settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };
+
