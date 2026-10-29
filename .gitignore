@@ -17,6 +17,7 @@ build/
 
 # Database runtime data
 Database/mysql_data/
+Database/mysql-server/
 *.err
 *.pid
 

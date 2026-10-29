@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BorderGlow } from '../animation/BorderGlow';
 import { GlareHover } from '../animation/GlareHover';
-import { Clock, Navigation, Plus } from 'lucide-react';
+import { Clock, Navigation, Plus, Sparkles } from 'lucide-react';
 
 export function ActiveSessionBanner() {
   const { isAuthenticated } = useAuth();
@@ -13,8 +13,8 @@ export function ActiveSessionBanner() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Hide for unauthenticated visitors, or when no session, or on find-car page to avoid repetition
-  if (!isAuthenticated || !activeSession || location.pathname === '/find-car') {
+  // Hide for unauthenticated visitors, or when no session, or on assistant page to avoid repetition
+  if (!isAuthenticated || !activeSession || location.pathname === '/parking-assistant' || location.pathname === '/assistant' || location.pathname === '/find-car') {
     return null;
   }
 
@@ -101,11 +101,11 @@ export function ActiveSessionBanner() {
 
                   <GlareHover borderRadius="6px" glareColor="rgba(255,255,255,0.4)" glareOpacity={0.4}>
                     <button
-                      onClick={() => navigate('/find-car')}
+                      onClick={() => navigate('/parking-assistant')}
                       className="btn btn-primary btn-xs"
                       style={{ gap: 4 }}
                     >
-                      <Navigation size={13} /> Find My Car
+                      <Sparkles size={13} /> Assistant
                     </button>
                   </GlareHover>
                 </div>

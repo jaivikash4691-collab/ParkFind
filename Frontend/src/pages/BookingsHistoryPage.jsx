@@ -19,7 +19,8 @@ import {
   CheckCircle2,
   Calendar,
   QrCode,
-  AlertCircle
+  AlertCircle,
+  Sparkles
 } from 'lucide-react';
 
 export function BookingsHistoryPage() {
@@ -247,11 +248,11 @@ export function BookingsHistoryPage() {
                           <Plus size={14} /> +1 Hr
                         </button>
                         <button
-                          onClick={() => navigate('/find-car')}
+                          onClick={() => navigate('/parking-assistant')}
                           className="btn btn-primary btn-sm"
                           style={{ gap: 4 }}
                         >
-                          <Navigation size={14} /> Wayfinding
+                          <Sparkles size={14} /> Assistant
                         </button>
                       </>
                     ) : isCompleted && !b.hasReviewed ? (

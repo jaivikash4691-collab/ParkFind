@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useActiveSession } from '../../context/ActiveSessionContext';
 import { useTheme } from '../../context/ThemeContext';
 import { PublicHeader } from './PublicHeader';
 import { NotificationDropdown } from './NotificationDropdown';
@@ -21,11 +22,13 @@ import {
   Moon,
   LogOut,
   User,
-  ChevronDown
+  ChevronDown,
+  Sparkles
 } from 'lucide-react';
 
 export function Navbar() {
   const { user, isAuthenticated, isOwner, loading, logout, authModal, openAuthModal, closeAuthModal } = useAuth();
+  const { activeSession } = useActiveSession();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -81,7 +84,7 @@ export function Navbar() {
   const customerLinks = [
     { to: '/', label: 'Discover', icon: Compass },
     { to: '/explore', label: 'Explore & Map', icon: MapPin },
-    { to: '/find-car', label: 'Find My Car', icon: Car },
+    { to: '/parking-assistant', label: 'Parking Assistant', icon: Sparkles, hasActive: !!activeSession },
     { to: '/insights', label: 'Demand Insights', icon: TrendingUp },
     { to: '/bookings', label: 'My Bookings', icon: History },
   ];
@@ -100,7 +103,7 @@ export function Navbar() {
   const customerBubbleItems = [
     { label: 'Discover', href: '/', icon: <Compass size={16} /> },
     { label: 'Explore & Map', href: '/explore', icon: <MapPin size={16} /> },
-    { label: 'Find My Car', href: '/find-car', icon: <Car size={16} /> },
+    { label: 'Parking Assistant', href: '/parking-assistant', icon: <Sparkles size={16} /> },
     { label: 'Demand Insights', href: '/insights', icon: <TrendingUp size={16} /> },
     { label: 'My Bookings', href: '/bookings', icon: <History size={16} /> },
     {
@@ -169,6 +172,20 @@ export function Navbar() {
                       >
                         <Icon size={15} />
                         <span>{link.label}</span>
+                        {link.hasActive && (
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              backgroundColor: '#10b981',
+                              boxShadow: '0 0 6px #10b981',
+                              display: 'inline-block',
+                              marginLeft: 2,
+                            }}
+                            title="Active Parked Vehicle"
+                          />
+                        )}
                       </NavLink>
                     </li>
                   );

@@ -821,6 +821,131 @@ async function getMyBookings(req, res, next) {
 }
 
 /**
+ * GET /api/bookings/expenses
+ * Real-time parking expenses and analytics for the authenticated customer.
+ * Aggregates actual completed and paid database records.
+ */
+async function getCustomerExpenses(req, res, next) {
+  try {
+    if (!req.user || !req.user.id) {
+      const error = new Error('Authentication required to view your parking expenses.');
+      error.statusCode = 401;
+      return next(error);
+    }
+
+    const userId = req.user.id;
+
+    // 1. Fetch all bookings for this customer with location & payment details
+    const [rows] = await pool.query(`
+      SELECT 
+        b.id,
+        b.booking_ref,
+        b.vehicle_number,
+        b.driver_name,
+        b.start_time,
+        b.end_time,
+        b.duration_hours,
+        b.total_amount,
+        b.booking_status,
+        b.created_at,
+        s.slot_no,
+        s.slot_type,
+        l.name AS location_name,
+        l.address,
+        l.area,
+        p.status AS payment_status,
+        p.payment_method
+      FROM bookings b
+      INNER JOIN parking_slots s ON b.parking_slot_id = s.id
+      INNER JOIN parking_locations l ON b.parking_location_id = l.id
+      LEFT JOIN payments p ON b.id = p.booking_id
+      WHERE b.customer_id = ? OR b.driver_phone = (SELECT phone FROM users WHERE id = ?)
+      ORDER BY b.created_at DESC
+    `, [userId, userId]);
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    let currentMonthSpent = 0;
+    let currentMonthCount = 0;
+    let totalSpentAllTime = 0;
+    let validBookingsCount = 0;
+
+    // Monthly aggregation map for the last 6 months
+    const monthlyMap = {};
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(currentYear, currentMonth - i, 1);
+      const key = `${d.toLocaleString('en-US', { month: 'short' })} ${d.getFullYear()}`;
+      monthlyMap[key] = { month: key, total: 0, count: 0 };
+    }
+
+    const history = [];
+
+    for (const b of rows) {
+      const amount = parseFloat(b.total_amount) || 0;
+      const bDate = new Date(b.created_at || b.start_time);
+      const isPaidOrCompleted = b.booking_status === 'completed' || b.booking_status === 'active' || b.payment_status === 'paid';
+
+      if (isPaidOrCompleted) {
+        totalSpentAllTime += amount;
+        validBookingsCount += 1;
+
+        if (bDate.getMonth() === currentMonth && bDate.getFullYear() === currentYear) {
+          currentMonthSpent += amount;
+          currentMonthCount += 1;
+        }
+
+        const mKey = `${bDate.toLocaleString('en-US', { month: 'short' })} ${bDate.getFullYear()}`;
+        if (monthlyMap[mKey]) {
+          monthlyMap[mKey].total += amount;
+          monthlyMap[mKey].count += 1;
+        }
+      }
+
+      history.push({
+        id: b.id,
+        bookingRef: b.booking_ref,
+        vehicleNumber: b.vehicle_number,
+        locationName: b.location_name,
+        address: b.address,
+        area: b.area,
+        slotNo: b.slot_no,
+        slotType: b.slot_type,
+        startTime: b.start_time,
+        endTime: b.end_time,
+        durationHours: b.duration_hours,
+        totalAmount: amount,
+        status: b.booking_status,
+        paymentStatus: b.payment_status || 'paid',
+        paymentMethod: b.payment_method || 'upi',
+        createdAt: b.created_at
+      });
+    }
+
+    const averageCost = validBookingsCount > 0 ? (totalSpentAllTime / validBookingsCount) : 0;
+    const monthlySpendingChart = Object.values(monthlyMap);
+
+    res.json({
+      success: true,
+      data: {
+        summary: {
+          currentMonthSpending: parseFloat(currentMonthSpent.toFixed(2)),
+          currentMonthBookings: currentMonthCount,
+          totalSpendingAllTime: parseFloat(totalSpentAllTime.toFixed(2)),
+          totalBookingsCount: rows.length,
+          averageCost: parseFloat(averageCost.toFixed(2))
+        },
+        monthlyChart: monthlySpendingChart,
+        history
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * GET /api/bookings/owner-bookings (Owner-filtered incoming bookings)
  */
 async function getOwnerBookings(req, res, next) {
@@ -926,6 +1051,131 @@ async function getOwnerBookings(req, res, next) {
       success: true,
       count: bookings.length,
       data: bookings
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /api/bookings/expenses
+ * Real-time parking expenses and analytics for the authenticated customer.
+ * Aggregates actual completed and paid database records.
+ */
+async function getCustomerExpenses(req, res, next) {
+  try {
+    if (!req.user || !req.user.id) {
+      const error = new Error('Authentication required to view your parking expenses.');
+      error.statusCode = 401;
+      return next(error);
+    }
+
+    const userId = req.user.id;
+
+    // 1. Fetch all bookings for this customer with location & payment details
+    const [rows] = await pool.query(`
+      SELECT 
+        b.id,
+        b.booking_ref,
+        b.vehicle_number,
+        b.driver_name,
+        b.start_time,
+        b.end_time,
+        b.duration_hours,
+        b.total_amount,
+        b.booking_status,
+        b.created_at,
+        s.slot_no,
+        s.slot_type,
+        l.name AS location_name,
+        l.address,
+        l.area,
+        p.status AS payment_status,
+        p.payment_method
+      FROM bookings b
+      INNER JOIN parking_slots s ON b.parking_slot_id = s.id
+      INNER JOIN parking_locations l ON b.parking_location_id = l.id
+      LEFT JOIN payments p ON b.id = p.booking_id
+      WHERE b.customer_id = ? OR b.driver_phone = (SELECT phone FROM users WHERE id = ?)
+      ORDER BY b.created_at DESC
+    `, [userId, userId]);
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    let currentMonthSpent = 0;
+    let currentMonthCount = 0;
+    let totalSpentAllTime = 0;
+    let validBookingsCount = 0;
+
+    // Monthly aggregation map for the last 6 months
+    const monthlyMap = {};
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(currentYear, currentMonth - i, 1);
+      const key = `${d.toLocaleString('en-US', { month: 'short' })} ${d.getFullYear()}`;
+      monthlyMap[key] = { month: key, total: 0, count: 0 };
+    }
+
+    const history = [];
+
+    for (const b of rows) {
+      const amount = parseFloat(b.total_amount) || 0;
+      const bDate = new Date(b.created_at || b.start_time);
+      const isPaidOrCompleted = b.booking_status === 'completed' || b.booking_status === 'active' || b.payment_status === 'paid';
+
+      if (isPaidOrCompleted) {
+        totalSpentAllTime += amount;
+        validBookingsCount += 1;
+
+        if (bDate.getMonth() === currentMonth && bDate.getFullYear() === currentYear) {
+          currentMonthSpent += amount;
+          currentMonthCount += 1;
+        }
+
+        const mKey = `${bDate.toLocaleString('en-US', { month: 'short' })} ${bDate.getFullYear()}`;
+        if (monthlyMap[mKey]) {
+          monthlyMap[mKey].total += amount;
+          monthlyMap[mKey].count += 1;
+        }
+      }
+
+      history.push({
+        id: b.id,
+        bookingRef: b.booking_ref,
+        vehicleNumber: b.vehicle_number,
+        locationName: b.location_name,
+        address: b.address,
+        area: b.area,
+        slotNo: b.slot_no,
+        slotType: b.slot_type,
+        startTime: b.start_time,
+        endTime: b.end_time,
+        durationHours: b.duration_hours,
+        totalAmount: amount,
+        status: b.booking_status,
+        paymentStatus: b.payment_status || 'paid',
+        paymentMethod: b.payment_method || 'upi',
+        createdAt: b.created_at
+      });
+    }
+
+    const averageCost = validBookingsCount > 0 ? (totalSpentAllTime / validBookingsCount) : 0;
+    const monthlySpendingChart = Object.values(monthlyMap);
+
+    res.json({
+      success: true,
+      data: {
+        summary: {
+          currentMonthSpending: parseFloat(currentMonthSpent.toFixed(2)),
+          currentMonthBookings: currentMonthCount,
+          totalSpendingAllTime: parseFloat(totalSpentAllTime.toFixed(2)),
+          totalBookingsCount: rows.length,
+          averageCost: parseFloat(averageCost.toFixed(2))
+        },
+        monthlyChart: monthlySpendingChart,
+        history
+      }
     });
   } catch (error) {
     next(error);
@@ -1585,6 +1835,7 @@ module.exports = {
   updateBookingStatus,
   getActiveCarLocation,
   getMyBookings,
+  getCustomerExpenses,
   getOwnerBookings,
   getBookingByIdOrRef,
   getBookingQrPass,

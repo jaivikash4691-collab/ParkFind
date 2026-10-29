@@ -7,6 +7,7 @@ const { validateBookingInput } = require('../middleware/validation');
 // Protected Customer Booking Operations (Mandatory Server-Side Authentication)
 router.post('/', requireAuth, validateBookingInput, bookingController.createBooking);
 router.get('/my-bookings', requireAuth, bookingController.getMyBookings);
+router.get('/expenses', requireAuth, bookingController.getCustomerExpenses);
 router.get('/active-car', optionalAuth, bookingController.getActiveCarLocation);
 router.get('/owner-bookings', requireAuth, requireRole('owner'), bookingController.getOwnerBookings);
 
