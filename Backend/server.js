@@ -3,6 +3,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
 const { testConnection } = require('./config/db');
+const { initializeDatabase } = require('./utils/initDb');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 // Load environment variables
@@ -81,6 +82,14 @@ async function startServer() {
   const isDbConnected = await testConnection();
   if (!isDbConnected) {
     console.warn('⚠️  Warning: MySQL connection could not be established. Ensure MySQL service is running.');
+  } else {
+    try {
+      // Safe, idempotent auto-initialization on startup (ensures empty databases like TiDB Cloud on Render are ready)
+      await initializeDatabase({ silent: true });
+      console.log('✓ Database schema verified and ready for queries.');
+    } catch (dbInitErr) {
+      console.error('⚠️  Database schema auto-initialization error:', dbInitErr.message);
+    }
   }
 
   app.listen(PORT, () => {
