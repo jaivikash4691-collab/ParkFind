@@ -30,6 +30,12 @@ if (process.env.DB_SSL === 'true' || (process.env.DB_HOST && process.env.DB_HOST
       ca: fs.readFileSync(certPath),
       rejectUnauthorized: false
     };
+  } else {
+    // Cloud database (e.g. TiDB Cloud) SSL fallback when custom ca.pem is not bundled
+    poolConfig.ssl = {
+      minVersion: 'TLSv1.2',
+      rejectUnauthorized: false
+    };
   }
 }
 
