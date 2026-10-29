@@ -233,27 +233,6 @@ export function AuthModal({ isOpen, onClose, initialRole = 'customer', initialMo
           </div>
         </div>
 
-        {/* Demo Credentials Helper Pill */}
-        <div
-          style={{
-            padding: '0.65rem 0.85rem',
-            borderRadius: 'var(--radius-md)',
-            backgroundColor: 'var(--bg-elevated)',
-            border: '1px solid var(--border-subtle)',
-            fontSize: '0.75rem',
-            color: 'var(--text-muted)',
-            lineHeight: 1.4,
-          }}
-        >
-          <strong style={{ color: 'var(--text-secondary)' }}>Demo Account Credentials:</strong>
-          <br />
-          {role === 'owner' ? (
-            <>Owner: <code>owner1@parkfind.test</code> · Pwd: <code>Demo@12345</code></>
-          ) : (
-            <>Customer: <code>demo.customer@parkfind.test</code> · Pwd: <code>Demo@12345</code></>
-          )}
-        </div>
-
         <button
           type="submit"
           className="btn btn-primary btn-block btn-lg"
