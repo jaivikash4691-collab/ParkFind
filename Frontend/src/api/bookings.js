@@ -18,6 +18,9 @@ export const bookingsApi = {
   getMyBookings: () => 
     apiRequest('/bookings/my-bookings'),
 
+  getExpenses: () =>
+    apiRequest('/bookings/expenses'),
+
   getOwnerBookings: (params = {}) => {
     const query = new URLSearchParams(params).toString();
     return apiRequest(`/bookings/owner-bookings${query ? `?${query}` : ''}`);

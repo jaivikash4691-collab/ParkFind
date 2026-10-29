@@ -13,8 +13,6 @@ import {
   EyeOff,
   ArrowLeft,
   ShieldCheck,
-  CheckCircle2,
-  Sparkles
 } from 'lucide-react';
 
 export function LoginPage() {
@@ -100,28 +98,6 @@ export function LoginPage() {
       showToast(err.message || 'Authentication failed. Please check your credentials.', 'danger');
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const fillDemoCredentials = (targetRole) => {
-    if (targetRole === 'owner') {
-      setRole('owner');
-      setFormData({
-        fullName: 'Muruganathan S',
-        email: 'owner1@parkfind.test',
-        phone: '+91 98422 10001',
-        password: 'Demo@12345',
-      });
-      showToast('Loaded Space Owner demo credentials', 'info', 1500);
-    } else {
-      setRole('customer');
-      setFormData({
-        fullName: 'Raveendran K',
-        email: 'demo.customer@parkfind.test',
-        phone: '+91 98422 10101',
-        password: 'Demo@12345',
-      });
-      showToast('Loaded Driver demo credentials', 'info', 1500);
     }
   };
 
@@ -431,46 +407,6 @@ export function LoginPage() {
                 {isRegister ? 'Already have an account? Sign In' : "Don't have an account? Create one"}
               </button>
             </div>
-
-            {/* 1-Click Demo Credentials Helper */}
-            {!isRegister && (
-              <div
-                style={{
-                  marginTop: '0.5rem',
-                  padding: '0.85rem 1rem',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-subtle)',
-                  fontSize: '0.78rem',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontWeight: 800, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Sparkles size={13} style={{ color: 'var(--accent-primary)' }} /> Quick Demo Autofill:
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => fillDemoCredentials('customer')}
-                    className="btn btn-secondary btn-xs"
-                    style={{ flex: 1, gap: 4, fontSize: '0.75rem' }}
-                  >
-                    <Car size={13} /> Driver Demo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => fillDemoCredentials('owner')}
-                    className="btn btn-secondary btn-xs"
-                    style={{ flex: 1, gap: 4, fontSize: '0.75rem' }}
-                  >
-                    <Building2 size={13} /> Owner Demo
-                  </button>
-                </div>
-              </div>
-            )}
           </form>
         </div>
       </div>

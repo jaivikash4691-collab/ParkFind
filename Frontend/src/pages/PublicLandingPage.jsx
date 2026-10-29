@@ -17,7 +17,8 @@ import {
   Compass,
   Car,
   Building2,
-  ArrowRight
+  ArrowRight,
+  Sparkles
 } from 'lucide-react';
 
 export function PublicLandingPage() {
@@ -391,17 +392,17 @@ export function PublicLandingPage() {
                     color: '#818cf8',
                   }}
                 >
-                  <Car size={20} />
+                  <Sparkles size={20} />
                 </div>
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  Find My Car &amp; Wayfinding
+                  Smart Parking Assistant
                 </h3>
                 <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
-                  Never lose your vehicle. Track active parking sessions, check remaining time, and follow turn-by-turn aisle directions.
+                  Active session countdowns, proactive 15m/5m expiry warnings, automated meter extensions, and monthly expense analytics.
                 </p>
                 <button
                   type="button"
-                  onClick={() => handleProtectedAction('use Find My Car wayfinding', '/find-car')}
+                  onClick={() => handleProtectedAction('open Parking Assistant', '/parking-assistant')}
                   className="btn btn-ghost btn-sm"
                   style={{
                     padding: 0,
@@ -412,7 +413,7 @@ export function PublicLandingPage() {
                     gap: 4,
                   }}
                 >
-                  <span>Locate Vehicle</span>
+                  <span>Open Assistant</span>
                   <ArrowRight size={13} />
                 </button>
               </div>

@@ -13,7 +13,7 @@ import { PublicLandingPage } from './pages/PublicLandingPage';
 import { DiscoverPage } from './pages/DiscoverPage';
 import { ExplorePage } from './pages/ExplorePage';
 import { BookingPage } from './pages/BookingPage';
-import { FindMyCarPage } from './pages/FindMyCarPage';
+import { ParkingAssistantPage } from './pages/ParkingAssistantPage';
 import { DemandInsightsPage } from './pages/DemandInsightsPage';
 import { BookingsHistoryPage } from './pages/BookingsHistoryPage';
 import { LoginPage } from './pages/LoginPage';
@@ -92,10 +92,26 @@ export function AppContent() {
             }
           />
           <Route
+            path="/parking-assistant"
+            element={
+              <ProtectedRoute>
+                <ParkingAssistantPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/assistant"
+            element={
+              <ProtectedRoute>
+                <ParkingAssistantPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/find-car"
             element={
               <ProtectedRoute>
-                <FindMyCarPage />
+                <ParkingAssistantPage />
               </ProtectedRoute>
             }
           />
@@ -103,7 +119,7 @@ export function AppContent() {
             path="/find-my-car"
             element={
               <ProtectedRoute>
-                <FindMyCarPage />
+                <ParkingAssistantPage />
               </ProtectedRoute>
             }
           />

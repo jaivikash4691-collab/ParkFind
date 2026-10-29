@@ -16,7 +16,8 @@ import {
   Shield,
   MapPin,
   Car,
-  AlertCircle
+  AlertCircle,
+  Sparkles
 } from 'lucide-react';
 
 export function DigitalPassModal({ isOpen, onClose, bookingResult }) {
@@ -219,9 +220,9 @@ export function DigitalPassModal({ isOpen, onClose, bookingResult }) {
     qrImg.src = qrDataUrl;
   };
 
-  const handleGoToWayfinding = () => {
+  const handleGoToAssistant = () => {
     onClose();
-    navigate('/find-car');
+    navigate('/parking-assistant');
   };
 
   return (
@@ -256,10 +257,10 @@ export function DigitalPassModal({ isOpen, onClose, bookingResult }) {
           <button
             type="button"
             className="btn btn-primary btn-sm"
-            onClick={handleGoToWayfinding}
+            onClick={handleGoToAssistant}
             style={{ gap: 6 }}
           >
-            <Navigation size={14} /> Indoor Wayfinding →
+            <Sparkles size={14} /> Parking Assistant →
           </button>
         </div>
       }

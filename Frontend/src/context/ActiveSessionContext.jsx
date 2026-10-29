@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { bookingsApi } from '../api/bookings';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
@@ -12,10 +12,19 @@ export function ActiveSessionProvider({ children }) {
   const [activeSession, setActiveSession] = useState(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    return typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+  });
+
+  // Track whether 15m and 5m alerts fired for current session to prevent duplicate alarms
+  const alerted15mRef = useRef(false);
+  const alerted5mRef = useRef(false);
+  const lastSessionIdRef = useRef(null);
 
   const refreshActiveSession = useCallback(async () => {
     if (!isCustomer) {
       setActiveSession(null);
+      setRemainingSeconds(0);
       return;
     }
 
@@ -23,6 +32,12 @@ export function ActiveSessionProvider({ children }) {
       setLoading(true);
       const res = await bookingsApi.getActiveCar();
       if (res && res.hasActiveCar && res.data) {
+        // Reset alert flags if this is a new booking session
+        if (lastSessionIdRef.current !== res.data.bookingId) {
+          alerted15mRef.current = false;
+          alerted5mRef.current = false;
+          lastSessionIdRef.current = res.data.bookingId;
+        }
         setActiveSession(res.data);
         setRemainingSeconds(res.data.remainingSeconds || 0);
       } else {
@@ -30,8 +45,8 @@ export function ActiveSessionProvider({ children }) {
         setRemainingSeconds(0);
       }
     } catch (err) {
-      // Non-blocking background check
       setActiveSession(null);
+      setRemainingSeconds(0);
     } finally {
       setLoading(false);
     }
@@ -53,42 +68,107 @@ export function ActiveSessionProvider({ children }) {
           refreshActiveSession();
           return 0;
         }
-        return prev - 1;
+
+        const next = prev - 1;
+
+        // Proactive 15-Minute Expiry Reminder (at <= 900 seconds)
+        if (next <= 900 && next > 895 && !alerted15mRef.current) {
+          alerted15mRef.current = true;
+          triggerExpiryReminder(15, activeSession);
+        }
+
+        // Urgent 5-Minute Expiry Reminder (at <= 300 seconds)
+        if (next <= 300 && next > 295 && !alerted5mRef.current) {
+          alerted5mRef.current = true;
+          triggerExpiryReminder(5, activeSession);
+        }
+
+        return next;
       });
     }, 1000);
 
     return () => clearInterval(interval);
   }, [activeSession, remainingSeconds, refreshActiveSession]);
 
+  /**
+   * Safe notification trigger using Browser Notifications when granted, with in-app toast fallback
+   */
+  const triggerExpiryReminder = (minutesRemaining, session) => {
+    const title = minutesRemaining <= 5 
+      ? '🚨 Parking Session Expiring in 5 Minutes!' 
+      : '⚠️ Parking Session Expiring Soon (15m)';
+    const body = `Your reservation for Bay ${session?.slotNo || ''} at ${session?.locationName || 'the parking facility'} ends shortly. Extend now to prevent overstay penalties.`;
+
+    // 1. Browser Notification (if supported and granted)
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(title, {
+          body,
+          icon: '/favicon.ico',
+          badge: '/favicon.ico',
+        });
+      } catch (err) {
+        console.warn('Browser notification error:', err);
+      }
+    }
+
+    // 2. In-App Toast
+    showToast(`${title}: ${body}`, minutesRemaining <= 5 ? 'danger' : 'warning', 6000);
+  };
+
+  /**
+   * Request Desktop Browser Notification permission
+   */
+  const requestNotificationPermission = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      showToast('Browser desktop notifications are not supported on this device.', 'warning');
+      return false;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        setNotificationsEnabled(true);
+        showToast('Desktop parking alerts enabled successfully!', 'success');
+        return true;
+      } else {
+        setNotificationsEnabled(false);
+        showToast('Notification permission was dismissed or blocked. In-app alerts will remain active.', 'info');
+        return false;
+      }
+    } catch (err) {
+      console.warn('Error requesting notification permission:', err);
+      return false;
+    }
+  };
+
+  /**
+   * Extend active parking session by N hours
+   */
   const quickExtend = async (hours = 1) => {
     if (!activeSession) return;
     try {
       await bookingsApi.extend(activeSession.bookingId, hours);
       showToast(`Session successfully extended by ${hours} hour(s)!`, 'success');
+      alerted15mRef.current = false;
+      alerted5mRef.current = false;
       await refreshActiveSession();
     } catch (err) {
       showToast(`Failed to extend session: ${err.message}`, 'danger');
     }
   };
 
-  const locateCar = async (term) => {
+  /**
+   * Cancel active booking
+   */
+  const cancelActiveBooking = async (reason = 'Cancelled by user') => {
+    if (!activeSession) return;
     try {
-      setLoading(true);
-      const res = await bookingsApi.getActiveCar({ plate: term, ref: term });
-      if (res && res.hasActiveCar && res.data) {
-        setActiveSession(res.data);
-        setRemainingSeconds(res.data.remainingSeconds || 0);
-        showToast(`Located active parking session for ${res.data.vehicleNumber}`, 'success');
-        return res.data;
-      } else {
-        showToast('No active parking session found matching this plate number or reference.', 'warning');
-        return null;
-      }
+      await bookingsApi.cancel(activeSession.bookingId, reason);
+      showToast('Booking cancelled successfully.', 'info');
+      await refreshActiveSession();
     } catch (err) {
-      showToast(err.message, 'danger');
-      return null;
-    } finally {
-      setLoading(false);
+      showToast(`Cancellation error: ${err.message}`, 'danger');
     }
   };
 
@@ -109,7 +189,9 @@ export function ActiveSessionProvider({ children }) {
         loading,
         refreshActiveSession,
         quickExtend,
-        locateCar,
+        cancelActiveBooking,
+        notificationsEnabled,
+        requestNotificationPermission,
       }}
     >
       {children}
