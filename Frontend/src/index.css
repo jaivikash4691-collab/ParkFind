@@ -557,7 +557,7 @@ img, svg {
   color: var(--text-secondary);
 }
 
-.form-input, .form-control, .form-select, .form-textarea {
+.form-input, .form-control, .form-select, .form-textarea, .input-field {
   width: 100%;
   padding: 0.65rem 0.95rem;
   background-color: var(--bg-input);
@@ -567,15 +567,25 @@ img, svg {
   font-size: 0.875rem;
   transition: all var(--transition-fast);
   outline: none;
+  box-sizing: border-box;
 }
 
-.form-input:focus, .form-control:focus, .form-select:focus, .form-textarea:focus {
+.form-input:focus, .form-control:focus, .form-select:focus, .form-textarea:focus, .input-field:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px var(--accent-surface);
 }
 
-.form-input::placeholder, .form-control::placeholder, .form-textarea::placeholder {
+.form-input::placeholder, .form-control::placeholder, .form-textarea::placeholder, .input-field::placeholder {
   color: var(--text-dim);
+}
+
+.input-error {
+  border-color: #ef4444 !important;
+}
+
+.input-error:focus {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
 }
 
 .form-select {
